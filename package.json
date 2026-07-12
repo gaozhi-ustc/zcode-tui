@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Terminal UI frontend for ZCode, usable over ssh",
-  "bin": { "zcode-tui": "src/main.js" },
+  "bin": {
+    "zcode-tui": "src/main.js"
+  },
   "scripts": {
     "start": "node src/main.js",
     "test": "vitest run",
@@ -11,6 +13,7 @@
   },
   "dependencies": {
     "ink": "^7.1.0",
+    "ink-text-input": "^6.0.0",
     "react": "^19.2.0"
   },
   "devDependencies": {
