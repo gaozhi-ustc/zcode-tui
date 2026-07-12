@@ -26,7 +26,7 @@ test('buildCliConfig 从 v2 config 生成正确 cli config', () => {
 test('buildCliConfig 选第一个 enabled provider 的第一个 model', () => {
   const v2Config = {
     provider: {
-      'p1': { enabled: true, kind: 'anthropic', options: { apiKey: 'K' }, models: { 'Alpha': {}, 'Beta': {} } }
+      'p1': { enabled: true, kind: 'anthropic', options: { apiKey: 'K', baseURL: 'https://x' }, models: { 'Alpha': {}, 'Beta': {} } }
     }
   };
   const result = buildCliConfig(v2Config);
@@ -36,4 +36,13 @@ test('buildCliConfig 选第一个 enabled provider 的第一个 model', () => {
 test('buildCliConfig 无 enabled provider 时抛错', () => {
   const v2Config = { provider: { 'p1': { enabled: false } } };
   expect(() => buildCliConfig(v2Config)).toThrow(/no enabled provider/i);
+});
+
+test('buildCliConfig 缺 baseURL 或 apiKey 时 fail-fast', () => {
+  const v2Config = {
+    provider: {
+      'p1': { enabled: true, kind: 'anthropic', options: { apiKey: 'K' }, models: { 'Alpha': {} } }
+    }
+  };
+  expect(() => buildCliConfig(v2Config)).toThrow(/missing options\.baseURL or options\.apiKey/i);
 });

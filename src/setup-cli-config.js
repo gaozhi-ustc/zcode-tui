@@ -16,6 +16,12 @@ export function buildCliConfig(v2Config) {
   const [providerId, provider] = enabled;
   const modelIds = Object.keys(provider.models || {});
   if (modelIds.length === 0) throw new Error(`provider ${providerId} has no models`);
+  // fail-fast:缺 baseURL/apiKey 会生成静默坏配置,后续报 "missing API key" 难排查
+  const baseURL = provider.options?.baseURL;
+  const apiKey = provider.options?.apiKey;
+  if (!baseURL || !apiKey) {
+    throw new Error(`provider ${providerId} is missing options.baseURL or options.apiKey in v2 config`);
+  }
   const modelId = modelIds[0];
   return {
     model: `${providerId}/${modelId}`,
@@ -24,8 +30,8 @@ export function buildCliConfig(v2Config) {
         name: provider.name,
         kind: provider.kind,
         options: {
-          baseURL: provider.options?.baseURL,
-          apiKey: provider.options?.apiKey
+          baseURL,
+          apiKey
         },
         enabled: true
       }
