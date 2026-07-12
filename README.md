@@ -5,7 +5,7 @@
 ## 前置条件
 
 - ZCode GUI 已安装且至少登录运行过一次(用于生成 v2 config 与 apiKey)
-- Node.js v18+
+- Node.js v22+(ink 7 要求 react>=19,react 19 需要 node>=22)
 
 ## 安装
 
