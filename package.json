@@ -1,0 +1,20 @@
+{
+  "name": "zcode-ssh-tui",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Terminal UI frontend for ZCode, usable over ssh",
+  "bin": { "zcode-tui": "src/main.js" },
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "ink": "^7.1.0",
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "ink-testing-library": "^4.0.0",
+    "vitest": "^4.1.10"
+  }
+}
