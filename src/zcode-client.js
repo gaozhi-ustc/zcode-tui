@@ -5,6 +5,24 @@ import { EventEmitter } from 'node:events';
 const DEFAULT_CMD = 'node';
 const DEFAULT_ARGS = ['/opt/ZCode/resources/glm/zcode.cjs', 'app-server'];
 
+/** 把原始 server 消息解析为高层事件对象。 */
+export function parseEvent(raw) {
+  if (raw.method === 'state.updated') {
+    return { type: 'state', patch: raw.params.patch, sessionId: raw.params.sessionId, scope: raw.params.scope };
+  }
+  if (raw.method === 'session/event') {
+    const p = raw.params.payload || {};
+    if (p.content != null && p.querySource) return { type: 'text', text: p.content, querySource: p.querySource, assistantMessageId: p.assistantMessageId };
+    if (p.response != null) return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber };
+    if (p.input != null) return { type: 'turn-start', input: p.input, turnNumber: p.turnNumber };
+    return { type: 'raw', payload: p };
+  }
+  if (raw.method === 'interaction/requestPermission') {
+    return { type: 'permission', requestId: raw.params?.requestId, ...raw.params };
+  }
+  return { type: 'unknown', raw };
+}
+
 /**
  * ZCode app-server 协议客户端。
  * spawn 子进程,用行分隔 JSON-RPC({id, method, params})通信。
@@ -76,6 +94,29 @@ export class ZCodeClient extends EventEmitter {
   _rejectAll(err) {
     for (const { reject } of this._pending.values()) reject(err);
     this._pending.clear();
+  }
+
+  /** 创建会话,返回 sessionId。 */
+  async createSession(workspacePath) {
+    const result = await this.send('session/create', {
+      workspace: { workspaceKey: workspacePath, workspacePath }
+    });
+    return result.session.sessionId;
+  }
+
+  /** 订阅会话事件流。 */
+  async subscribe(sessionId) {
+    return this.send('session/subscribe', { sessionId, deliveryKind: 'desktop-continuous' });
+  }
+
+  /** 发送用户消息(content 字段,非 message)。 */
+  async sendMessage(sessionId, content) {
+    return this.send('session/send', { sessionId, content });
+  }
+
+  /** 响应权限请求。 */
+  async respondPermission(requestId, decision) {
+    return this.send('interaction/respondPermission', { requestId, decision });
   }
 
   async disconnect() {

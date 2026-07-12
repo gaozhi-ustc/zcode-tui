@@ -53,3 +53,31 @@ test('子进程退出后 send 立即 reject', async () => {
   await c.connect();
   await expect(c.send('session/list', {})).rejects.toThrow();
 });
+
+import { parseEvent } from '../src/zcode-client.js';
+
+test('parseEvent 把 state.updated 解析为 state 事件', () => {
+  const raw = { method: 'state.updated', params: { patch: { status: 'running' }, sessionId: 's1', scope: 'session' } };
+  const parsed = parseEvent(raw);
+  expect(parsed.type).toBe('state');
+  expect(parsed.patch.status).toBe('running');
+});
+
+test('parseEvent 把 session/event 含 content 解析为 text 事件', () => {
+  const raw = { method: 'session/event', params: { payload: { content: 'pong', querySource: 'main_turn' } } };
+  const parsed = parseEvent(raw);
+  expect(parsed.type).toBe('text');
+  expect(parsed.text).toBe('pong');
+});
+
+test('parseEvent 把 session/event 含 response 解析为 turn-complete', () => {
+  const raw = { method: 'session/event', params: { payload: { response: 'done', turnNumber: 1 } } };
+  const parsed = parseEvent(raw);
+  expect(parsed.type).toBe('turn-complete');
+});
+
+test('parseEvent 未知 payload 归类为 raw', () => {
+  const raw = { method: 'session/event', params: { payload: { somethingNew: true } } };
+  const parsed = parseEvent(raw);
+  expect(parsed.type).toBe('raw');
+});
