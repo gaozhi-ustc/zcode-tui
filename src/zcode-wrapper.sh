@@ -2,7 +2,7 @@
 # zcode-ssh-tui wrapper — 把 shell 里的 zcode 路由到自建 TUI
 set -euo pipefail
 
-PROJECT_DIR="/home/gaozhi/ZCodeProject"
+PROJECT_DIR="/home/gaozhi/ZCodeProject/zcode-tui"
 
 # 逃生舱:显式要原生 CLI
 if [ "${ZCODE_CLI_LEGACY:-0}" = "1" ]; then
