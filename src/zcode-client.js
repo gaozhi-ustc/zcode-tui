@@ -119,6 +119,11 @@ export class ZCodeClient extends EventEmitter {
     return this.send('interaction/respondPermission', { requestId, decision });
   }
 
+  /** 中断当前会话的运行中 turn（对应 Ctrl+C 中断）。 */
+  async stop(sessionId) {
+    return this.send('session/stop', { sessionId });
+  }
+
   async disconnect() {
     this._closed = true;
     if (this.proc) {
