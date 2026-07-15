@@ -69,8 +69,8 @@ function truncate(s, max) {
 
 const DOUBLE_PRESS_TIMEOUT_MS = 800;
 
-export function App({ client, sessionId }) {
-  const [messages, setMessages] = useState([]);
+export function App({ client, sessionId, initialMessages = [] }) {
+  const [messages, setMessages] = useState(initialMessages);
   const [status, setStatus] = useState('idle');
   const [model, setModel] = useState('GLM-5.2');
   const [mode, setMode] = useState('build');

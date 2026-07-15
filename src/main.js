@@ -5,13 +5,67 @@ import { ensureCliConfig } from './setup-cli-config.js';
 import { ZCodeClient } from './zcode-client.js';
 import { App } from './tui/App.js';
 
+/**
+ * 把 app-server session/read 返回的历史消息转成 App 可渲染的格式。
+ * 原始格式：{info:{agent,...}, parts:[{type:'text'|'tool'|..., ...}]}
+ * 转成：{role:'user'|'assistant'|'tool', text|toolName|...}
+ */
+function convertHistoryMessages(rawMessages) {
+  const result = [];
+  for (const msg of rawMessages) {
+    const isUser = msg.info?.agent === 'user' || msg.info?.role === 'user';
+    const parts = msg.parts || [];
+    // 收集 assistant 文本和工具调用
+    const textParts = parts.filter(p => p.type === 'text');
+    const toolParts = parts.filter(p => p.type === 'tool');
+
+    if (isUser && textParts.length > 0) {
+      result.push({ role: 'user', text: textParts.map(p => p.text).join('\n') });
+    } else if (!isUser) {
+      // assistant 文本
+      if (textParts.length > 0) {
+        result.push({
+          role: 'assistant',
+          text: textParts.map(p => p.text).join('\n'),
+          streaming: false,
+        });
+      }
+      // 工具调用
+      for (const tp of toolParts) {
+        if (tp.state === 'result' || tp.result) {
+          result.push({
+            role: 'tool',
+            toolName: tp.tool || tp.name || 'unknown',
+            toolInput: tp.input || {},
+            toolCallId: tp.callId,
+            result: tp.result,
+            error: tp.result?.success === false,
+            streaming: false,
+          });
+        } else {
+          result.push({
+            role: 'tool',
+            toolName: tp.tool || tp.name || 'unknown',
+            toolInput: tp.input || {},
+            toolCallId: tp.callId,
+            result: null,
+            streaming: false,
+          });
+        }
+      }
+    }
+  }
+  return result;
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const opts = { resume: null, workspace: null };
   for (let i = 0; i < args.length; i++) {
     if ((args[i] === '--resume' || args[i] === '-r') && args[i + 1]) {
       opts.resume = args[++i];
-    } else if (args[i] === '--resume-last' || args[i] === '-R') {
+    } else if (args[i] === '--resume-last' || args[i] === '-R' || args[i] === 'resume') {
+      // 'resume' 作为裸子命令也支持（git 风格：zcode resume）
       opts.resume = 'last';
     } else if (!args[i].startsWith('-')) {
       opts.workspace = args[i];
@@ -41,16 +95,19 @@ async function main() {
 
   // 4. 建会话（或恢复已有会话）
   let sessionId;
+  let historyMessages = [];
   try {
     if (opts.resume) {
-      // 恢复模式
       let targetId = opts.resume;
+      let targetTitle = '';
       if (opts.resume === 'last') {
-        // 列出会话，取最近一个
-        const sessions = await client.listSessions();
-        const list = Array.isArray(sessions) ? sessions : (sessions?.sessions || []);
+        // 列出会话，取最近一个非当前的
+        const result = await client.listSessions();
+        const list = result?.sessions || result || [];
         if (list.length > 0) {
-          targetId = list[0].sessionId || list[0].id || list[0];
+          const target = list[0];
+          targetId = target.sessionId || target.id;
+          targetTitle = target.title || '';
         } else {
           console.error('没有可恢复的会话，创建新会话');
           targetId = null;
@@ -59,7 +116,10 @@ async function main() {
       if (targetId) {
         sessionId = targetId;
         await client.resumeSession(sessionId);
-        console.error(`已恢复会话: ${sessionId.slice(0, 12)}...`);
+        // 拉取历史消息
+        const read = await client.send('session/read', { sessionId });
+        historyMessages = convertHistoryMessages(read.messages || []);
+        console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);
       } else {
         sessionId = await client.createSession(workspace);
       }
@@ -71,7 +131,7 @@ async function main() {
   await client.subscribe(sessionId);
 
   // 5. 渲染 TUI
-  const instance = render(React.createElement(App, { client, sessionId }));
+  const instance = render(React.createElement(App, { client, sessionId, initialMessages: historyMessages }));
 
   // 6. 退出清理
   const cleanup = async () => { instance.unmount(); await client.disconnect(); process.exit(0); };
