@@ -6,6 +6,7 @@ import { InputBox } from './InputBox.js';
 import { ToolUse } from './components/ToolUse.js';
 import { PermissionDialog } from './components/PermissionDialog.js';
 import { ModelPicker } from './components/ModelPicker.js';
+import { Spinner } from './components/Spinner.js';
 import { QuestionDialog } from './components/QuestionDialog.js';
 import { parseEvent } from '../zcode-client.js';
 
@@ -89,6 +90,8 @@ export function App({ client, sessionId, initialMessages = [] }) {
   const lastProgressRef = useRef(0);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
+  const [turnStartTime, setTurnStartTime] = useState(0);
+  const [responseLength, setResponseLength] = useState(0);
 
   useEffect(() => {
     const onEvent = (raw) => {
@@ -101,6 +104,8 @@ export function App({ client, sessionId, initialMessages = [] }) {
         if (evt.patch?.usage) setUsage(evt.patch.usage);
       } else if (evt.type === 'text') {
         const mid = evt.assistantMessageId;
+        // 累加响应长度（用于 spinner 的 token 估算）
+        if (evt.text) setResponseLength(prev => prev + evt.text.length);
         setMessages(prev => {
           if (mid != null) {
             const idx = prev.findIndex(m => m.mid === mid);
@@ -220,9 +225,12 @@ export function App({ client, sessionId, initialMessages = [] }) {
       } else if (evt.type === 'turn-start') {
         setStatus('running');
         if (evt.turnNumber) setTurnNumber(evt.turnNumber);
+        setTurnStartTime(Date.now());
+        setResponseLength(0);
       } else if (evt.type === 'turn-complete') {
         setStatus('idle');
         setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
+        setTurnStartTime(0);
       }
     };
     client.on('event', onEvent);
@@ -444,6 +452,12 @@ export function App({ client, sessionId, initialMessages = [] }) {
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(StatusBar, { model, mode, sessionId, status, turnNumber, usage }),
     React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
+    // Spinner 行：agent 工作时显示动画 + 动词 + 耗时 + token（对齐 Claude Code）
+    React.createElement(Spinner, {
+      active: isRunning && !dialogActive && !modelPickerOpen,
+      startTime: turnStartTime,
+      responseLength,
+    }),
     // 模型选择面板（/model 无参数时弹出，优先级最高）
     modelPickerOpen
       ? React.createElement(ModelPicker, {
