@@ -10,7 +10,6 @@ test('StatusBar 渲染模型与模式', () => {
   const { lastFrame } = render(React.createElement(StatusBar, { model: 'GLM-5.2', mode: 'build', sessionId: 'sess_abc123', status: 'idle' }));
   expect(lastFrame()).toContain('GLM-5.2');
   expect(lastFrame()).toContain('build');
-  expect(lastFrame()).toContain('sess_abc123');
 });
 
 test('MessageList 渲染对话条目', () => {

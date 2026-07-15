@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, Box, useInput, useStdout } from 'ink';
-import { Markdown } from './markdown/Markdown.js';
-import { StreamingMarkdown } from './markdown/Markdown.js';
+import { Markdown, StreamingMarkdown } from './markdown/Markdown.js';
+import { ToolUse } from './components/ToolUse.js';
 
 // 每次翻页的行数
 const PAGE_LINES = 10;
@@ -34,7 +34,14 @@ export function MessageList({ messages, scrollOffset = 0, setScrollOffset }) {
       return React.createElement(Text, { key: realIdx, color: 'green' }, `user: ${m.text}`);
     }
     if (m.role === 'tool') {
-      return React.createElement(Text, { key: realIdx, dimColor: true }, `  [tool] ${m.name}: ${m.text}`);
+      return React.createElement(ToolUse, {
+        key: realIdx,
+        toolName: m.toolName || m.name || 'unknown',
+        toolInput: m.toolInput,
+        result: m.result,
+        error: m.error,
+        streaming: m.streaming,
+      });
     }
     if (m.role === 'error') {
       return React.createElement(Text, { key: realIdx, color: 'red' }, `error: ${m.text}`);

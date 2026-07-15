@@ -12,6 +12,30 @@ export function parseEvent(raw) {
   }
   if (raw.method === 'session/event') {
     const p = raw.params.payload || {};
+    // 工具调用开始：payload 含 toolCall / tool_use / toolName 字段
+    if (p.toolCall || p.tool_use || p.toolName) {
+      const tc = p.toolCall || p.tool_use || {};
+      return {
+        type: 'tool-call',
+        toolName: p.toolName || tc.name || tc.toolName || 'unknown',
+        toolInput: p.toolInput || tc.input || tc.arguments || tc.params || {},
+        toolCallId: p.toolCallId || tc.id,
+        assistantMessageId: p.assistantMessageId,
+        turnNumber: p.turnNumber,
+      };
+    }
+    // 工具调用结果
+    if (p.toolResult || p.tool_result) {
+      const tr = p.toolResult || p.tool_result || {};
+      return {
+        type: 'tool-result',
+        toolCallId: p.toolCallId || tr.toolCallId || tr.id,
+        toolName: p.toolName || tr.name || tr.toolName,
+        result: tr.result ?? tr.output ?? tr.content ?? p.result,
+        error: tr.error || tr.isError,
+        turnNumber: p.turnNumber,
+      };
+    }
     if (p.content != null && p.querySource) return { type: 'text', text: p.content, querySource: p.querySource, assistantMessageId: p.assistantMessageId };
     if (p.response != null) return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber };
     if (p.input != null) return { type: 'turn-start', input: p.input, turnNumber: p.turnNumber };
@@ -19,6 +43,9 @@ export function parseEvent(raw) {
   }
   if (raw.method === 'interaction/requestPermission') {
     return { type: 'permission', requestId: raw.params?.requestId, ...raw.params };
+  }
+  if (raw.method === 'interaction/requestUserInput') {
+    return { type: 'user-input-request', requestId: raw.params?.requestId, ...raw.params };
   }
   return { type: 'unknown', raw };
 }
@@ -122,6 +149,32 @@ export class ZCodeClient extends EventEmitter {
   /** 中断当前会话的运行中 turn（对应 Ctrl+C 中断）。 */
   async stop(sessionId) {
     return this.send('session/stop', { sessionId });
+  }
+
+  /** 列出所有会话（用于会话恢复）。 */
+  async listSessions() {
+    const result = await this.send('session/list');
+    return result.sessions || result;
+  }
+
+  /** 恢复已有会话。 */
+  async resumeSession(sessionId) {
+    return this.send('session/resume', { sessionId });
+  }
+
+  /** 运行时切换模型。 */
+  async setModel(sessionId, modelId) {
+    return this.send('session/setModel', { sessionId, modelId });
+  }
+
+  /** 运行时切换权限模式。 */
+  async setMode(sessionId, mode) {
+    return this.send('session/setMode', { sessionId, mode });
+  }
+
+  /** 压缩对话上下文。 */
+  async compact(sessionId) {
+    return this.send('session/compact', { sessionId });
   }
 
   async disconnect() {
