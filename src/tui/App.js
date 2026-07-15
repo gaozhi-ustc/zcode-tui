@@ -15,6 +15,57 @@ function normalizeEvent(raw) {
   return raw;
 }
 
+/**
+ * 根据工具类型和输入，提取权限请求的具体操作描述。
+ * 让用户清楚知道要授权的是什么操作（命令内容、文件路径、搜索内容等）。
+ */
+function formatPermissionDetail(params) {
+  const { toolName, input, reason, riskLevel } = params;
+  const parts = [];
+
+  // 风险等级
+  if (riskLevel) {
+    const riskLabel = { high: '⚠️ 高风险', medium: '🔶 中风险', low: '🟢 低风险' }[riskLevel] || riskLevel;
+    parts.push(riskLabel);
+  }
+
+  // 按工具类型提取具体操作
+  if (input && typeof input === 'object') {
+    const detail = extractToolAction(toolName, input);
+    if (detail) parts.push(detail);
+  }
+
+  // server 给的原因（通常是一句话说明为什么需要权限）
+  if (reason) parts.push(reason);
+
+  return parts.join('\n');
+}
+
+/** 按工具类型提取具体的操作内容。 */
+function extractToolAction(toolName, input) {
+  const cmd = input.command || input.cmd;
+  const filePath = input.file_path || input.filePath || input.path;
+  const pattern = input.pattern || input.query || input.prompt || input.searchText;
+
+  if (cmd) return `$ ${cmd}`;
+  if (filePath && input.old_string != null) return `编辑文件: ${filePath}`;
+  if (filePath && input.content != null) return `写入文件: ${filePath}`;
+  if (filePath) return `访问文件: ${filePath}`;
+  if (pattern) return `${toolName}: ${truncate(pattern, 100)}`;
+  if (input.url) return `访问: ${input.url}`;
+  // 兜底：展示 JSON 摘要
+  const keys = Object.keys(input);
+  if (keys.length > 0) {
+    return `${toolName}: ${keys.map(k => `${k}=${truncate(String(input[k]), 40)}`).join(', ')}`;
+  }
+  return toolName || '';
+}
+
+function truncate(s, max) {
+  if (!s) return '';
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
 const DOUBLE_PRESS_TIMEOUT_MS = 800;
 
 export function App({ client, sessionId }) {
@@ -108,11 +159,15 @@ export function App({ client, sessionId }) {
       const parsed = normalizeEvent(msg);
       if (parsed && parsed.type === 'permission') {
         // 保留原始 JSON-RPC id（响应用），同时存 parse 出的字段
+        const params = msg.params || {};
         setPermissionQueue(q => [...q, {
           ...parsed,
           rpcId: msg.id,  // JSON-RPC id，响应用
-          toolName: msg.params?.toolName || parsed.toolName || 'unknown',
-          detail: msg.params?.input?.command || msg.params?.reason || msg.params?.input?.file_path,
+          toolName: params.toolName || parsed.toolName || 'unknown',
+          input: params.input,
+          reason: params.reason,
+          riskLevel: params.riskLevel,
+          detail: formatPermissionDetail(params),
         }]);
       }
     };

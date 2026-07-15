@@ -10,37 +10,73 @@ const OPTIONS = [
  * 权限确认对话框。
  * 对齐 Claude Code 的 PermissionDialog + Select 组件。
  *
+ * 清楚展示：工具名、风险等级、具体操作内容（命令/文件路径等）、原因。
+ *
  * @param {object} props
  * @param {string} props.toolName - 请求权限的工具名
- * @param {string} props.detail - 权限请求详情（如命令、文件路径）
+ * @param {string} props.detail - 权限请求详情（多行：风险+操作+原因）
+ * @param {string} props.input - 工具输入参数（原始）
+ * @param {string} props.reason - server 给的原因
  * @param {function} props.onDecide - 决策回调 (decision: 'yes'|'no') => void
  */
-export function PermissionDialog({ toolName, detail, onDecide }) {
+export function PermissionDialog({ toolName, detail, input, reason, onDecide }) {
   const [selected, setSelected] = useState(0);
 
-  useInput((input, key) => {
-    if (input === 'y' || input === 'Y' || key.return) {
+  useInput((inputKey, key) => {
+    if (inputKey === 'y' || inputKey === 'Y' || key.return) {
       onDecide('yes');
-    } else if (input === 'n' || input === 'N' || key.escape) {
+    } else if (inputKey === 'n' || inputKey === 'N' || key.escape) {
       onDecide('no');
-    } else if (key.leftArrow || input === 'h') {
+    } else if (key.leftArrow || inputKey === 'h') {
       setSelected(s => Math.max(0, s - 1));
-    } else if (key.rightArrow || input === 'l') {
+    } else if (key.rightArrow || inputKey === 'l') {
       setSelected(s => Math.min(OPTIONS.length - 1, s + 1));
     }
   });
+
+  // 解析详情里的各行（风险、操作、原因）
+  const detailLines = (detail || '').split('\n').filter(Boolean);
+
+  // 检测风险等级着色
+  const isHighRisk = detailLines.some(l => l.includes('高风险'));
+  const borderColor = isHighRisk ? 'red' : 'yellow';
 
   return React.createElement(
     Box,
     {
       flexDirection: 'column',
       borderStyle: 'round',
-      borderColor: 'yellow',
+      borderColor,
       marginTop: 1,
       paddingX: 1,
     },
-    React.createElement(Text, { bold: true, color: 'yellow' }, `⚡ 权限请求: ${toolName}`),
-    detail && React.createElement(Text, { dimColor: true }, detail),
+    // 标题行：工具名
+    React.createElement(
+      Box,
+      null,
+      React.createElement(Text, { bold: true, color: borderColor }, '⚡ 权限请求: '),
+      React.createElement(Text, { bold: true }, toolName)
+    ),
+    // 详情各行
+    detailLines.map((line, i) => {
+      // 风险等级行着色
+      if (line.includes('高风险')) {
+        return React.createElement(Text, { key: i, color: 'red', bold: true }, line);
+      }
+      if (line.includes('中风险')) {
+        return React.createElement(Text, { key: i, color: 'yellow' }, line);
+      }
+      if (line.includes('低风险')) {
+        return React.createElement(Text, { key: i, color: 'green' }, line);
+      }
+      // 命令行用代码样式
+      if (line.startsWith('$ ')) {
+        return React.createElement(Text, { key: i, color: 'cyan' }, line);
+      }
+      // 其他详情
+      return React.createElement(Text, { key: i, dimColor: true }, line);
+    }),
+    // 选项
     React.createElement(
       Box,
       { marginTop: 1 },
@@ -52,7 +88,7 @@ export function PermissionDialog({ toolName, detail, onDecide }) {
             Text,
             {
               color: i === selected ? 'black' : undefined,
-              backgroundColor: i === selected ? 'yellow' : undefined,
+              backgroundColor: i === selected ? borderColor : undefined,
               bold: i === selected,
             },
             ` ${opt.label} `
