@@ -273,12 +273,13 @@ export function App({ client, sessionId }) {
     };
   }, [client]);
 
-  // Ctrl+C：running 时中断 turn，idle 时双击退出
+  // 对话框打开时禁用其他所有 useInput，避免按键竞争
+  const dialogActive = permissionQueue.length > 0 || questionQueue.length > 0;
+
+  // Ctrl+C：running 时中断 turn，idle 时双击退出（对话框打开时停用）
   useInput((input, key) => {
     if (input !== '\x03') return;
     const now = Date.now();
-    // 权限/提问对话框打开时，Ctrl+C 不退出（归对话框处理）
-    if (permissionQueue.length > 0 || questionQueue.length > 0) return;
     if (isRunning) {
       if (typeof client.stop === 'function') client.stop(sessionId).catch(() => {});
       setStatus('idle');
@@ -291,7 +292,7 @@ export function App({ client, sessionId }) {
     } else {
       firstCtrlCRef.current = now;
     }
-  });
+  }, { isActive: !dialogActive });
 
   const handleSubmit = async (text) => {
     // 权限/提问对话框打开时禁用输入提交
@@ -407,7 +408,7 @@ export function App({ client, sessionId }) {
 
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(StatusBar, { model, mode, sessionId, status, turnNumber, usage }),
-    React.createElement(MessageList, { messages, scrollOffset, setScrollOffset }),
+    React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive }),
     // 交互层：权限请求 > 用户提问 > 输入框。三者互斥（对齐 Claude Code 的
     // PermissionRequest 优先占满交互区，AskUserQuestion 走同一通道）。
     // 之前 QuestionDialog 从未被渲染——三元只看 permissionQueue，导致

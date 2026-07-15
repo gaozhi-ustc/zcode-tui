@@ -6,13 +6,13 @@ import { ToolUse } from './components/ToolUse.js';
 // 每次翻页的行数
 const PAGE_LINES = 10;
 
-export function MessageList({ messages, scrollOffset = 0, setScrollOffset }) {
+export function MessageList({ messages, scrollOffset = 0, setScrollOffset, inputDisabled = false }) {
   const { stdout } = useStdout();
   const termHeight = stdout?.rows || 24;
   // 输入框 + 状态栏 + 提示行占用约 4 行，消息区可用高度
   const viewHeight = Math.max(termHeight - 4, 4);
 
-  // PageUp/PageDown 翻页（仅当 setScrollOffset 传入时启用）
+  // PageUp/PageDown 翻页（仅当 setScrollOffset 传入且无对话框时启用）
   useInput((_, key) => {
     if (!setScrollOffset) return;
     if (key.pageUp) {
@@ -20,7 +20,7 @@ export function MessageList({ messages, scrollOffset = 0, setScrollOffset }) {
     } else if (key.pageDown) {
       setScrollOffset(off => Math.max(0, off - PAGE_LINES));
     }
-  });
+  }, { isActive: !inputDisabled });
 
   const all = messages || [];
   const total = all.length;
