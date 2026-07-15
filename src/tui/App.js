@@ -69,6 +69,22 @@ function truncate(s, max) {
   return s.length > max ? s.slice(0, max) + '…' : s;
 }
 
+/**
+ * 从工具 input 里提取 ruleContent（匹配规则内容）。
+ * 对齐 app-server 的 ruleContentFromPermissionInput（t3o）：
+ * 按 ["command","url","file_path","path","pattern"] 优先级取第一个非空字段。
+ */
+function buildRuleContent(input) {
+  if (!input || typeof input !== 'object') return {};
+  for (const key of ['command', 'url', 'file_path', 'path', 'pattern']) {
+    const val = input[key];
+    if (typeof val === 'string' && val.trim()) {
+      return { ruleContent: val };
+    }
+  }
+  return {};
+}
+
 const DOUBLE_PRESS_TIMEOUT_MS = 800;
 
 export function App({ client, sessionId, initialMessages = [] }) {
@@ -390,7 +406,12 @@ export function App({ client, sessionId, initialMessages = [] }) {
             permissionUpdates: [{
               type: 'addRules',
               behavior: 'allow',
-              rules: [{ toolName: current.toolName }],
+              rules: [{
+                toolName: current.toolName,
+                // ruleContent：对齐 app-server 的 ruleContentFromPermissionInput，
+                // 从 input 里取 command/url/file_path/path/pattern 作为匹配规则
+                ...buildRuleContent(current.input),
+              }],
             }],
           });
         } else {
