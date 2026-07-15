@@ -163,6 +163,15 @@ export class ZCodeClient extends EventEmitter {
     this._pending.clear();
   }
 
+  /** 获取可用模型列表（通过 workspace/readState 的 modelCatalog）。 */
+  async getAvailableModels(workspacePath) {
+    const ws = workspacePath || process.cwd();
+    const result = await this.send('workspace/readState', {
+      workspace: { workspaceKey: ws, workspacePath: ws }
+    });
+    return result?.modelCatalog?.available || [];
+  }
+
   /** 创建会话,返回 sessionId。 */
   async createSession(workspacePath) {
     const result = await this.send('session/create', {

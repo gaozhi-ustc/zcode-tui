@@ -5,6 +5,7 @@ import { MessageList } from './MessageList.js';
 import { InputBox } from './InputBox.js';
 import { ToolUse } from './components/ToolUse.js';
 import { PermissionDialog } from './components/PermissionDialog.js';
+import { ModelPicker } from './components/ModelPicker.js';
 import { QuestionDialog } from './components/QuestionDialog.js';
 import { parseEvent } from '../zcode-client.js';
 
@@ -86,6 +87,8 @@ export function App({ client, sessionId, initialMessages = [] }) {
   const isRunning = status === 'running';
   const firstCtrlCRef = useRef(0);
   const lastProgressRef = useRef(0);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
 
   useEffect(() => {
     const onEvent = (raw) => {
@@ -318,9 +321,23 @@ export function App({ client, sessionId, initialMessages = [] }) {
     try {
       switch (name) {
         case 'model':
-          if (arg && typeof client.setModel === 'function') {
-            await client.setModel(sessionId, arg);
-            setModel(arg);
+          if (arg) {
+            // 直接指定模型：/model GLM-5.2
+            if (typeof client.setModel === 'function') {
+              await client.setModel(sessionId, arg);
+              setModel(arg);
+            }
+          } else {
+            // 无参数：加载可用模型并弹出选择列表
+            try {
+              if (typeof client.getAvailableModels === 'function') {
+                const models = await client.getAvailableModels();
+                setAvailableModels(models);
+              }
+            } catch (e) {
+              setMessages(prev => [...prev, { role: 'error', text: `获取模型列表失败: ${e.message}` }]);
+            }
+            setModelPickerOpen(true);
           }
           break;
         case 'mode':
@@ -408,26 +425,40 @@ export function App({ client, sessionId, initialMessages = [] }) {
 
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(StatusBar, { model, mode, sessionId, status, turnNumber, usage }),
-    React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive }),
-    // 交互层：权限请求 > 用户提问 > 输入框。三者互斥（对齐 Claude Code 的
-    // PermissionRequest 优先占满交互区，AskUserQuestion 走同一通道）。
-    // 之前 QuestionDialog 从未被渲染——三元只看 permissionQueue，导致
-    // 后端发起提问时前端既无问题面板、也无输入框，用户完全看不到问题。
-    questionQueue.length > 0
-      ? React.createElement(QuestionDialog, {
-          questions: questionQueue[0].questions || [],
-          onRespond: handleQuestionRespond,
-          onCancel: handleQuestionCancel,
+    React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
+    // 模型选择面板（/model 无参数时弹出，优先级最高）
+    modelPickerOpen
+      ? React.createElement(ModelPicker, {
+          models: availableModels,
+          currentModel: model,
+          onSelect: async (m) => {
+            try {
+              if (typeof client.setModel === 'function') {
+                await client.setModel(sessionId, m.ref?.modelId || m.label);
+              }
+              setModel(m.ref?.modelId || m.label);
+            } catch (e) {
+              setMessages(prev => [...prev, { role: 'error', text: `切换模型失败: ${e.message}` }]);
+            }
+            setModelPickerOpen(false);
+          },
+          onCancel: () => setModelPickerOpen(false),
         })
-      : permissionQueue.length > 0
-        ? React.createElement(PermissionDialog, {
-            toolName: permissionQueue[0].toolName || 'unknown',
-            detail: permissionQueue[0].detail,
-            queueIndex: 1,
-            queueTotal: permissionQueue.length,
-            onDecide: handlePermissionDecide,
+      : questionQueue.length > 0
+        ? React.createElement(QuestionDialog, {
+            questions: questionQueue[0].questions || [],
+            onRespond: handleQuestionRespond,
+            onCancel: handleQuestionCancel,
           })
-        : React.createElement(InputBox, { onSubmit: handleSubmit }),
+        : permissionQueue.length > 0
+          ? React.createElement(PermissionDialog, {
+              toolName: permissionQueue[0].toolName || 'unknown',
+              detail: permissionQueue[0].detail,
+              queueIndex: 1,
+              queueTotal: permissionQueue.length,
+              onDecide: handlePermissionDecide,
+            })
+          : React.createElement(InputBox, { onSubmit: handleSubmit }),
     React.createElement(Text, { dimColor: true }, isRunning
       ? '[Ctrl+C] 中断当前任务'
       : questionQueue.length > 0

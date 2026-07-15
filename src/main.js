@@ -119,7 +119,22 @@ async function main() {
         // 拉取历史消息
         const read = await client.send('session/read', { sessionId });
         historyMessages = convertHistoryMessages(read.messages || []);
-        console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);
+        // 检查模型可用性：旧会话的模型可能已不可用
+        try {
+          const models = await client.getAvailableModels(workspace);
+          if (models.length > 0) {
+            // 尝试设置第一个可用模型（避免"模型不可用"错误）
+            const firstModel = models[0];
+            const modelId = firstModel.ref?.modelId || firstModel.label;
+            await client.setModel(sessionId, modelId);
+            console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史, 模型: ${modelId})`);
+          } else {
+            console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);
+          }
+        } catch {
+          console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);
+          console.error('提示: 用 /model 切换可用模型');
+        }
       } else {
         sessionId = await client.createSession(workspace);
       }
