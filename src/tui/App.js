@@ -97,7 +97,7 @@ function getLastStreamingToolName(messages) {
 
 const DOUBLE_PRESS_TIMEOUT_MS = 800;
 
-export function App({ client, sessionId, initialMessages = [] }) {
+export function App({ client, sessionId, initialMessages = [], runtimeModel = null }) {
   const [messages, setMessages] = useState(initialMessages);
   const [status, setStatus] = useState('idle');
   const [model, setModel] = useState('GLM-5.2');
@@ -114,6 +114,8 @@ export function App({ client, sessionId, initialMessages = [] }) {
   const isRunning = status === 'running';
   const firstCtrlCRef = useRef(0);
   const lastProgressRef = useRef(0);
+  // resume 后的首条消息带 runtimeModel 清除 restoreWarning，清除一次即可
+  const runtimeModelRef = useRef(runtimeModel);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
   const [turnStartTime, setTurnStartTime] = useState(0);
@@ -345,27 +347,17 @@ export function App({ client, sessionId, initialMessages = [] }) {
       return;
     }
     try {
-      await client.sendMessage(sessionId, text);
+      // resume 后首条消息带 runtimeModel 清除 restoreWarning
+      if (runtimeModelRef.current) {
+        await client.sendMessage(sessionId, text, runtimeModelRef.current);
+        runtimeModelRef.current = null; // 清除一次即可，后续不带
+      } else {
+        await client.sendMessage(sessionId, text);
+      }
     } catch (e) {
       const errMsg = e.message || JSON.stringify(e);
-      // 模型不可用（restoreWarning）：带 runtimeModel 重试清除 warning
       if (errMsg.includes('模型') && errMsg.includes('不可用') || e.code === -32031) {
-        try {
-          const models = typeof client.getAvailableModels === 'function'
-            ? await client.getAvailableModels() : [];
-          if (models.length > 0) {
-            const ref = models[0].ref || { providerId: '', modelId: models[0].label };
-            // 带 runtimeModel 重发——触发 GA → lvt 清除 restoreWarning
-            await client.sendMessage(sessionId, text, ref);
-            setModel(ref.modelId);
-            return;
-          }
-        } catch (retryErr) {
-          setMessages(prev => [...prev, { role: 'error', text: `模型切换重试失败: ${retryErr.message || retryErr}` }]);
-          return;
-        }
-        // 没有可用模型，弹选择面板
-        setMessages(prev => [...prev, { role: 'error', text: errMsg }]);
+        setMessages(prev => [...prev, { role: 'error', text: '模型不可用，请用 /model 选择模型' }]);
         setModelPickerOpen(true);
       } else {
         setMessages(prev => [...prev, { role: 'error', text: errMsg }]);

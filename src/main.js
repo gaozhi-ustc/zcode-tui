@@ -4,6 +4,7 @@ import { render } from 'ink';
 import { ensureCliConfig } from './setup-cli-config.js';
 import { ZCodeClient } from './zcode-client.js';
 import { App } from './tui/App.js';
+import { buildRuntimeModel } from './build-runtime-model.js';
 
 /**
  * 把 app-server session/read 返回的历史消息转成 App 可渲染的格式。
@@ -154,8 +155,14 @@ async function main() {
   catch (e) { console.error(`会话操作失败: ${JSON.stringify(e)}`); await client.disconnect(); process.exit(1); }
   await client.subscribe(sessionId);
 
-  // 5. 渲染 TUI
-  const instance = render(React.createElement(App, { client, sessionId, initialMessages: historyMessages }));
+  // 5. 为 resume 的会话构造 runtimeModel（清除 restoreWarning 用）
+  let runtimeModel = null;
+  if (opts.resume) {
+    runtimeModel = await buildRuntimeModel(client, workspace);
+  }
+
+  // 6. 渲染 TUI
+  const instance = render(React.createElement(App, { client, sessionId, initialMessages: historyMessages, runtimeModel }));
 
   // 6. 退出清理
   const cleanup = async () => {
