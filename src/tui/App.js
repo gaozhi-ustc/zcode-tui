@@ -345,7 +345,22 @@ export function App({ client, sessionId, initialMessages = [] }) {
       return;
     }
     try { await client.sendMessage(sessionId, text); }
-    catch (e) { setMessages(prev => [...prev, { role: 'error', text: e.message }]); }
+    catch (e) {
+      const errMsg = e.message || JSON.stringify(e);
+      // 模型不可用时自动弹出模型选择
+      if (errMsg.includes('模型') && errMsg.includes('不可用')) {
+        setMessages(prev => [...prev, { role: 'error', text: errMsg }]);
+        try {
+          if (typeof client.getAvailableModels === 'function') {
+            const models = await client.getAvailableModels();
+            setAvailableModels(models);
+          }
+        } catch {}
+        setModelPickerOpen(true);
+      } else {
+        setMessages(prev => [...prev, { role: 'error', text: errMsg }]);
+      }
+    }
   };
 
   // 斜杠命令路由

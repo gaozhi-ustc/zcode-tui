@@ -131,9 +131,10 @@ async function main() {
           } else {
             console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);
           }
-        } catch {
+        } catch (modelErr) {
           console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);
-          console.error('提示: 用 /model 切换可用模型');
+          console.error(`模型切换失败: ${JSON.stringify(modelErr.message || modelErr)}`);
+          console.error('提示: 进入后用 /model 切换可用模型');
         }
       } else {
         sessionId = await client.createSession(workspace);
