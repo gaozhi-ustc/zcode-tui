@@ -396,15 +396,26 @@ export function App({ client, sessionId, initialMessages = [] }) {
     }
   };
 
-  // 提问响应：把用户对每个问题的回答回复给 server。
-  // answers 形如 { [question文本]: label | label[] }，统一转成数组便于 server 解析。
+  // 提问响应：把用户对每个问题的回答回复给 server，并回显选择内容。
   const handleQuestionRespond = (answers) => {
     const current = questionQueue[0];
     if (!current) return;
     setQuestionQueue(q => q.slice(1));
+
+    // 回显用户的选择（让用户看到自己选了什么）
+    const answerLines = [];
+    for (const [question, answer] of Object.entries(answers || {})) {
+      const labels = Array.isArray(answer) ? answer : [answer];
+      const qShort = question.length > 60 ? question.slice(0, 57) + '...' : question;
+      answerLines.push(`${qShort}: ${labels.join(', ')}`);
+    }
+    if (answerLines.length > 0) {
+      setMessages(prev => [...prev, { role: 'user', text: answerLines.join('\n') }]);
+      setScrollOffset(0);
+    }
+
     try {
       if (typeof client.respondToServer === 'function') {
-        // 统一成 { questionText: [answers...] } 格式
         const normalized = {};
         for (const [k, v] of Object.entries(answers || {})) {
           normalized[k] = Array.isArray(v) ? v : [v];
