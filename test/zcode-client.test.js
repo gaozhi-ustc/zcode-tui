@@ -63,15 +63,15 @@ test('parseEvent 把 state.updated 解析为 state 事件', () => {
   expect(parsed.patch.status).toBe('running');
 });
 
-test('parseEvent 把 session/event 含 content 解析为 text 事件', () => {
-  const raw = { method: 'session/event', params: { payload: { content: 'pong', querySource: 'main_turn' } } };
+test('parseEvent 把 model.streaming text_delta 解析为 text 事件', () => {
+  const raw = { method: 'session/event', params: { type: 'model.streaming', payload: { kind: 'text_delta', delta: 'pong', assistantMessageId: 'msg-1' } } };
   const parsed = parseEvent(raw);
   expect(parsed.type).toBe('text');
   expect(parsed.text).toBe('pong');
 });
 
-test('parseEvent 把 session/event 含 response 解析为 turn-complete', () => {
-  const raw = { method: 'session/event', params: { payload: { response: 'done', turnNumber: 1 } } };
+test('parseEvent 把 turn.completed 解析为 turn-complete', () => {
+  const raw = { method: 'session/event', params: { type: 'turn.completed', payload: { response: 'done', turnNumber: 1 } } };
   const parsed = parseEvent(raw);
   expect(parsed.type).toBe('turn-complete');
 });

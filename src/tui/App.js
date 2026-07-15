@@ -259,6 +259,13 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
         setStatus('idle');
         setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
         setTurnStartTime(0);
+        if (evt.usage) setUsage(evt.usage);
+      } else if (evt.type === 'usage') {
+        // session.updated 带 usage（turn 中途的 token 统计）
+        if (evt.usage) setUsage(evt.usage);
+      } else if (evt.type === 'session-model') {
+        // 模型信息更新
+        if (evt.model?.modelId) setModel(evt.model.modelId);
       }
     };
     client.on('event', onEvent);
