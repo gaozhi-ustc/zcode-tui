@@ -322,10 +322,17 @@ export function App({ client, sessionId, initialMessages = [] }) {
       switch (name) {
         case 'model':
           if (arg) {
-            // 直接指定模型：/model GLM-5.2
+            // 直接指定模型：/model GLM-5.2（先查 modelCatalog 拿完整 ref）
             if (typeof client.setModel === 'function') {
-              await client.setModel(sessionId, arg);
-              setModel(arg);
+              try {
+                const models = typeof client.getAvailableModels === 'function'
+                  ? await client.getAvailableModels() : [];
+                const found = models.find(m => (m.ref?.modelId || m.label) === arg);
+                await client.setModel(sessionId, found?.ref || { providerId: '', modelId: arg });
+                setModel(arg);
+              } catch (e) {
+                setMessages(prev => [...prev, { role: 'error', text: `切换模型失败: ${e.message}` }]);
+              }
             }
           } else {
             // 无参数：加载可用模型并弹出选择列表
@@ -434,7 +441,8 @@ export function App({ client, sessionId, initialMessages = [] }) {
           onSelect: async (m) => {
             try {
               if (typeof client.setModel === 'function') {
-                await client.setModel(sessionId, m.ref?.modelId || m.label);
+                // model 参数必须是 {providerId, modelId} 对象
+                await client.setModel(sessionId, m.ref || { providerId: '', modelId: m.label });
               }
               setModel(m.ref?.modelId || m.label);
             } catch (e) {

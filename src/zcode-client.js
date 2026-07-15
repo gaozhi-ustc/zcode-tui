@@ -206,9 +206,11 @@ export class ZCodeClient extends EventEmitter {
     return this.send('session/resume', { sessionId });
   }
 
-  /** 运行时切换模型。 */
-  async setModel(sessionId, modelId) {
-    return this.send('session/setModel', { sessionId, modelId });
+  /** 运行时切换模型。model 参数为 {providerId, modelId} 或 modelId 字符串。 */
+  async setModel(sessionId, model) {
+    // app-server 要求 model 是 {providerId, modelId} 对象
+    const modelObj = typeof model === 'string' ? { providerId: '', modelId: model } : model;
+    return this.send('session/setModel', { sessionId, model: modelObj });
   }
 
   /** 运行时切换权限模式。 */

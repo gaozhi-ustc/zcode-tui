@@ -123,10 +123,10 @@ async function main() {
         try {
           const models = await client.getAvailableModels(workspace);
           if (models.length > 0) {
-            // 尝试设置第一个可用模型（避免"模型不可用"错误）
+            // 切换到第一个可用模型（避免旧模型不可用）
             const firstModel = models[0];
             const modelId = firstModel.ref?.modelId || firstModel.label;
-            await client.setModel(sessionId, modelId);
+            await client.setModel(sessionId, firstModel.ref || { providerId: '', modelId });
             console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史, 模型: ${modelId})`);
           } else {
             console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);
