@@ -142,6 +142,18 @@ export class ZCodeClient extends EventEmitter {
 
   isConnected() { return !this._closed && this.proc && !this.proc.killed; }
 
+  /**
+   * 重连：重新 spawn app-server 子进程。
+   * 用于 app-server 崩溃后恢复（session 持久化在 store 里，不丢失）。
+   * 重连后需要重新 resume + subscribe。
+   */
+  async reconnect() {
+    this._closed = false;
+    this._pending.clear();
+    this._nextId = 0;
+    return this.connect();
+  }
+
   /** 发送请求,返回 Promise(result)。error 则 reject。 */
   send(method, params = {}) {
     if (this._closed) return Promise.reject(new Error('client disconnected'));

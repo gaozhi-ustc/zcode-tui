@@ -165,17 +165,31 @@ async function main() {
   const instance = render(React.createElement(App, { client, sessionId, initialMessages: historyMessages, runtimeModel }));
 
   // 6. 退出清理
+  let exiting = false;
   const cleanup = async () => {
-    instance.unmount();
-    await client.disconnect();
-    // 显示 session ID，方便下次 resume
+    if (exiting) return;
+    exiting = true;
+    try { instance.unmount(); } catch {}
+    try { await client.disconnect(); } catch {}
     console.error(`\n会话已保存: ${sessionId}`);
     console.error(`恢复命令: zcode --resume ${sessionId}`);
     process.exit(0);
   };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
-  client.on('exit', () => { console.error('app-server 意外退出'); process.exit(1); });
+
+  // app-server 崩溃：不直接 exit，显示错误 + 恢复命令
+  client.on('exit', (code) => {
+    if (exiting) return;
+    exiting = true;
+    try { instance.unmount(); } catch {}
+    console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error(`⚠️  app-server 意外退出 (code: ${code})`);
+    console.error(`会话已保存: ${sessionId}`);
+    console.error(`恢复命令: zcode --resume ${sessionId}`);
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    process.exit(1);
+  });
 }
 
 main();
