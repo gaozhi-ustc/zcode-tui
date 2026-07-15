@@ -291,10 +291,11 @@ export function App({ client, sessionId, initialMessages = [] }) {
             options: params.options || [],
             multiSelect: !!params.multiSelect,
           }] : []);
-        setQuestionQueue(q => [...q, {
-          rpcId: msg.id,
-          questions,
-        }]);
+        setQuestionQueue(q => {
+          // 防重复：同一个 rpcId 的问题不重复加入
+          if (q.some(item => item.rpcId === msg.id)) return q;
+          return [...q, { rpcId: msg.id, questions }];
+        });
       }
     };
     client.on('server-request', onServerRequest);
@@ -405,6 +406,9 @@ export function App({ client, sessionId, initialMessages = [] }) {
   const handlePermissionDecide = async (decision) => {
     const current = permissionQueue[0];
     if (!current) return;
+    // 防重复：同一个 rpcId 只响应一次
+    if (respondedRpcIdsRef.current.has(current.rpcId)) return;
+    respondedRpcIdsRef.current.add(current.rpcId);
     setPermissionQueue(q => q.slice(1));
     try {
       if (typeof client.respondToServer === 'function') {
@@ -436,9 +440,14 @@ export function App({ client, sessionId, initialMessages = [] }) {
   };
 
   // 提问响应：把用户对每个问题的回答回复给 server，并回显选择内容。
+  // respondedRpcIds 防止重复响应（Enter 多次触发或事件重发）
+  const respondedRpcIdsRef = useRef(new Set());
   const handleQuestionRespond = (answers) => {
     const current = questionQueue[0];
     if (!current) return;
+    // 防重复：同一个 rpcId 只响应一次
+    if (respondedRpcIdsRef.current.has(current.rpcId)) return;
+    respondedRpcIdsRef.current.add(current.rpcId);
     setQuestionQueue(q => q.slice(1));
 
     // 回显用户的选择（让用户看到自己选了什么）
