@@ -8,8 +8,10 @@ const SPINNER_CHARS = ['·', '✢', '✳', '✶', '✻', '✽'];
 // 往返动画：正序 + 逆序去首尾，形成无缝循环
 const SPINNER_FRAMES = [...SPINNER_CHARS, ...[...SPINNER_CHARS].reverse().slice(1, -1)];
 
-// 动画间隔（Claude Code: frame 120ms 算，glimmer 200ms，整体 useAnimationFrame 50ms 驱动）
-const TICK_MS = 50;
+// 动画间隔：100ms 平衡流畅度和重渲染开销。
+// Claude Code 用 50ms 但有 ClockContext + viewport 暂停优化；我们无此优化，
+// 50ms 在长对话时会引起全屏闪烁，100ms 视觉差异极小。
+const TICK_MS = 100;
 const FRAME_DIVISOR = 120; // frame = floor(time / 120)
 
 // 30 秒后才显示耗时和 token（SHOW_TOKENS_AFTER_MS）
@@ -145,22 +147,15 @@ export const Spinner = memo(function Spinner({
   const timerText = formatDuration(elapsed);
   const tokenText = `${formatTokens(displayTokens)} tokens`;
 
-  // === shimmer 流光（简化版：用 bold 在动词上做扫光，每 200ms 移一位）===
-  const glimmerPos = Math.floor(time / 200) % Math.max(message.length, 1);
-
   return React.createElement(
     Box,
-    { flexDirection: 'row', marginTop: 0, paddingLeft: 1 },
+    { flexDirection: 'row', marginTop: 0, paddingLeft: 1, height: 1, flexShrink: 0 },
     // 旋转字符
     React.createElement(Text, { color: glyphColor }, glyph + ' '),
-    // 动词（带 shimmer 扫光）
+    // 动词（单 Text 渲染，避免逐字符拆分导致重渲染开销）
     stalledIntensity > 0.7
       ? React.createElement(Text, { color: 'red' }, message)
-      : React.createElement(
-          Text,
-          { dimColor: !currentToolName },
-          ...renderShimmerText(message, glimmerPos)
-        ),
+      : React.createElement(Text, { dimColor: !currentToolName, bold: !!currentToolName }, message),
     // 耗时 + token（30 秒后显示，括号包裹，dimColor 分隔符）
     showTimerTokens && React.createElement(
       Text,
@@ -180,15 +175,4 @@ export const Spinner = memo(function Spinner({
  * 渲染带 shimmer 扫光的文字。
  * glimmerPos 位置的字符用 bold 高亮，其余正常。
  */
-function renderShimmerText(text, glimmerPos) {
-  const parts = [];
-  for (let i = 0; i < text.length; i++) {
-    const isGlimmer = i === glimmerPos || i === glimmerPos + 1;
-    parts.push(
-      React.createElement(Text, { key: i, bold: isGlimmer }, text[i])
-    );
-  }
-  return parts;
-}
-
 export default Spinner;
