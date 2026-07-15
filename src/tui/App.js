@@ -344,18 +344,28 @@ export function App({ client, sessionId, initialMessages = [] }) {
       await handleSlashCommand(cmd);
       return;
     }
-    try { await client.sendMessage(sessionId, text); }
-    catch (e) {
+    try {
+      await client.sendMessage(sessionId, text);
+    } catch (e) {
       const errMsg = e.message || JSON.stringify(e);
-      // 模型不可用时自动弹出模型选择
-      if (errMsg.includes('模型') && errMsg.includes('不可用')) {
-        setMessages(prev => [...prev, { role: 'error', text: errMsg }]);
+      // 模型不可用（restoreWarning）：带 runtimeModel 重试清除 warning
+      if (errMsg.includes('模型') && errMsg.includes('不可用') || e.code === -32031) {
         try {
-          if (typeof client.getAvailableModels === 'function') {
-            const models = await client.getAvailableModels();
-            setAvailableModels(models);
+          const models = typeof client.getAvailableModels === 'function'
+            ? await client.getAvailableModels() : [];
+          if (models.length > 0) {
+            const ref = models[0].ref || { providerId: '', modelId: models[0].label };
+            // 带 runtimeModel 重发——触发 GA → lvt 清除 restoreWarning
+            await client.sendMessage(sessionId, text, ref);
+            setModel(ref.modelId);
+            return;
           }
-        } catch {}
+        } catch (retryErr) {
+          setMessages(prev => [...prev, { role: 'error', text: `模型切换重试失败: ${retryErr.message || retryErr}` }]);
+          return;
+        }
+        // 没有可用模型，弹选择面板
+        setMessages(prev => [...prev, { role: 'error', text: errMsg }]);
         setModelPickerOpen(true);
       } else {
         setMessages(prev => [...prev, { role: 'error', text: errMsg }]);

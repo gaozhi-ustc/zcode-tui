@@ -185,9 +185,11 @@ export class ZCodeClient extends EventEmitter {
     return this.send('session/subscribe', { sessionId, deliveryKind: 'desktop-continuous' });
   }
 
-  /** 发送用户消息(content 字段,非 message)。 */
-  async sendMessage(sessionId, content) {
-    return this.send('session/send', { sessionId, content });
+  /** 发送用户消息(content 字段,非 message)。可选 runtimeModel 触发 restoreWarning 清除。 */
+  async sendMessage(sessionId, content, runtimeModel = null) {
+    const params = { sessionId, content };
+    if (runtimeModel) params.runtimeModel = runtimeModel;
+    return this.send('session/send', params);
   }
 
   /** 中断当前会话的运行中 turn（对应 Ctrl+C 中断）。 */
