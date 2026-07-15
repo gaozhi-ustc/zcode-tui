@@ -8,11 +8,13 @@ const DEFAULT_ARGS = ['/opt/ZCode/resources/glm/zcode.cjs', 'app-server'];
 /**
  * 把原始 server 消息解析为高层事件对象。
  *
- * session/event 的事件类型在 params.type 字段（如 "tool_call_started"），
- * payload 在 params.payload。已从 app-server 源码确认完整事件类型枚举：
- * turn_started / model_streaming / model_complete / tool_call_scheduled /
- * tool_call_started / tool_call_progress / tool_call_result / tool_call_error /
- * tool_batch_complete / turn_complete 等。
+ * 实机抓包确认的事件格式（2026-07-16）：
+ * - session/event 的事件类型在 params.type（点号分隔，如 "model.streaming"）
+ * - payload 在 params.payload
+ * - 文本流式：model.streaming + payload.kind="text_delta"，文本在 payload.delta
+ * - 工具调用：model.streaming(kind=tool_call/tool_input_*) + tool.updated(kind=scheduled/started/result)
+ * - turn 生命周期：turn.started / turn.completed
+ * - session 状态：session.updated（含 usage）
  */
 export function parseEvent(raw) {
   if (raw.method === 'state.updated') {
@@ -23,43 +25,69 @@ export function parseEvent(raw) {
     const p = raw.params?.payload || {};
 
     switch (eventType) {
-      // 文本流式输出
-      case 'model_streaming':
-        return { type: 'text', text: p.content || p.text || '', assistantMessageId: p.assistantMessageId, querySource: p.querySource };
-      case 'model_complete':
-        return { type: 'text', text: p.content || p.text || '', assistantMessageId: p.assistantMessageId, querySource: p.querySource };
-
-      // Turn 生命周期
-      case 'turn_started':
+      // === Turn 生命周期 ===
+      case 'turn.started':
         return { type: 'turn-start', input: p.input, turnNumber: p.turnNumber };
-      case 'turn_complete':
-        return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber };
+      case 'turn.completed':
+        return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber, usage: p.usage, duration: p.duration };
 
-      // 工具调用
-      case 'tool_call_scheduled':
-        return { type: 'tool-call', toolName: p.toolName, toolInput: p.input || p.toolInput, toolCallId: p.toolCallId, phase: 'scheduled' };
-      case 'tool_call_started':
-        return { type: 'tool-call', toolName: p.toolName, toolInput: p.input || p.toolInput, toolCallId: p.toolCallId, phase: 'started', startedAt: p.startedAt };
-      case 'tool_call_progress':
-        return { type: 'tool-progress', toolName: p.toolName, toolCallId: p.toolCallId, elapsedMs: p.elapsedMs, stdoutTail: p.stdoutTail, stderrTail: p.stderrTail, outputBytes: p.outputBytes };
-      case 'tool_call_result':
-        return { type: 'tool-result', toolCallId: p.toolCallId, toolName: p.toolName, result: p.result, error: p.result?.success === false, duration: p.duration };
-      case 'tool_call_error':
-        return { type: 'tool-result', toolCallId: p.toolCallId, toolName: p.toolName, result: p.error || p.message, error: true };
-      case 'tool_batch_complete':
-        return { type: 'tool-batch-complete' };
+      // === 文本 + 工具调用流式（统一 model.streaming，用 payload.kind 区分）===
+      case 'model.streaming': {
+        const kind = p.kind;
+        // 文本增量
+        if (kind === 'text_delta') {
+          return { type: 'text', text: p.delta || '', assistantMessageId: p.assistantMessageId };
+        }
+        // 工具调用完整到达（含 input）
+        if (kind === 'tool_call') {
+          return { type: 'tool-call', toolName: p.toolName, toolInput: p.input, toolCallId: p.toolCallId, assistantMessageId: p.assistantMessageId };
+        }
+        // 工具输入流式片段（tool_input_start/delta/end）——当前忽略细节，tool_call 已含完整 input
+        if (kind === 'tool_input_start') {
+          return { type: 'tool-call', toolName: p.toolName, toolInput: {}, toolCallId: p.toolCallId, assistantMessageId: p.assistantMessageId };
+        }
+        // 其他 kind（tool_input_delta/end）忽略
+        return { type: 'raw', eventType, kind, payload: p };
+      }
+
+      // === 工具状态更新（统一 tool.updated，用 payload.kind 区分阶段）===
+      case 'tool.updated': {
+        const kind = p.kind;
+        if (kind === 'scheduled') {
+          return { type: 'tool-call', toolName: p.toolName, toolInput: {}, toolCallId: p.toolCallId, phase: 'scheduled' };
+        }
+        if (kind === 'started') {
+          return { type: 'tool-call', toolName: p.toolName, toolCallId: p.toolCallId, phase: 'started', startedAt: p.startedAt };
+        }
+        if (kind === 'result' || kind === 'error') {
+          return { type: 'tool-result', toolCallId: p.toolCallId, toolName: p.toolName, result: p.result, error: p.result?.success === false, duration: p.duration };
+        }
+        if (kind === 'batch') {
+          return { type: 'tool-batch-complete', successCount: p.successCount, errorCount: p.errorCount };
+        }
+        return { type: 'raw', eventType, kind, payload: p };
+      }
+
+      // === Session 状态更新（含 usage/token）===
+      case 'session.updated': {
+        // 有 usage 字段的 session.updated 是 turn 结束的统计
+        if (p.usage) {
+          return { type: 'usage', usage: p.usage, stopReason: p.stopReason, contextWindow: p.contextWindow };
+        }
+        // 有 model/modelRef 的是模型信息更新
+        if (p.model || p.modelRef) {
+          return { type: 'session-model', model: p.model, modelRef: p.modelRef, messageCount: p.messageCount, toolCount: p.toolCount };
+        }
+        return { type: 'raw', eventType, payload: p };
+      }
+
+      case 'session.titleUpdated':
+        return { type: 'title-updated', title: p.title };
+
+      case 'streamRecovery.updated':
+        return { type: 'raw', eventType, payload: p };
     }
 
-    // 兜底：旧格式兼容（无 type 字段时按 payload 内容推断）
-    if (p.content != null && p.querySource) {
-      return { type: 'text', text: p.content, querySource: p.querySource, assistantMessageId: p.assistantMessageId };
-    }
-    if (p.response != null) {
-      return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber };
-    }
-    if (p.input != null) {
-      return { type: 'turn-start', input: p.input, turnNumber: p.turnNumber };
-    }
     return { type: 'raw', eventType, payload: p };
   }
   if (raw.method === 'interaction/requestPermission') {

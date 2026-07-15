@@ -8,7 +8,7 @@ function useBlink(active) {
   const [on, setOn] = useState(true);
   useEffect(() => {
     if (!active) { setOn(true); return; }
-    const timer = setInterval(() => setOn(v => !v), 800);
+    const timer = setInterval(() => setOn(v => !v), 1200);
     return () => clearInterval(timer);
   }, [active]);
   return on;

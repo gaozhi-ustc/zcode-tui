@@ -86,15 +86,17 @@ export const Spinner = memo(function Spinner({
   const lastResponseLengthRef = useRef(0);
   const lastGrowthTimeRef = useRef(0);
 
-  // 动画时钟
+  // 动画时钟：有活跃工具或流式输出时降频（消息变化已在驱动渲染），
+  // 纯等待时才高频动画。避免多个重渲染源叠加导致闪烁。
+  const tickMs = (hasActiveTools || responseLength > 0) ? 500 : TICK_MS;
   useEffect(() => {
     if (!active) { setTime(0); tokenCounterRef.current = 0; lastResponseLengthRef.current = 0; return; }
     const startMs = startTime || Date.now();
     const timer = setInterval(() => {
       setTime(Date.now() - startMs);
-    }, TICK_MS);
+    }, tickMs);
     return () => clearInterval(timer);
-  }, [active, startTime]);
+  }, [active, startTime, tickMs]);
 
   if (!active || time === 0) return null;
 

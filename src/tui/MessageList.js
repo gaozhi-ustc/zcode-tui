@@ -6,7 +6,7 @@ import { ToolUse } from './components/ToolUse.js';
 // 每次翻页的行数
 const PAGE_LINES = 10;
 
-export function MessageList({ messages, scrollOffset = 0, setScrollOffset, inputDisabled = false }) {
+export const MessageList = memo(function MessageList({ messages, scrollOffset = 0, setScrollOffset, inputDisabled = false }) {
   const { stdout } = useStdout();
   const termHeight = stdout?.rows || 24;
   // 输入框 + 状态栏 + 提示行占用约 4 行，消息区可用高度
@@ -68,4 +68,4 @@ export function MessageList({ messages, scrollOffset = 0, setScrollOffset, input
       `↑ 向上翻看历史 (第 ${startIdx + 1}-${Math.min(endIdx, total)}/${total} 条)  PageDown 向下`),
     ...items
   );
-}
+});
