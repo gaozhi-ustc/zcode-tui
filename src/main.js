@@ -127,6 +127,14 @@ async function main() {
             const firstModel = models[0];
             const modelId = firstModel.ref?.modelId || firstModel.label;
             await client.setModel(sessionId, firstModel.ref || { providerId: '', modelId });
+            // 触发 deferred model adapter 初始化（resume 后模型不可用时的修复）
+            try {
+              await client.send('session/updateRuntimeModelConfig', {
+                sessionId,
+                runtimeModel: firstModel.ref || { providerId: '', modelId },
+                applyModelSelection: true,
+              });
+            } catch {}
             console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史, 模型: ${modelId})`);
           } else {
             console.error(`已恢复会话${targetTitle ? `「${targetTitle}」` : ''}: ${sessionId.slice(0, 12)}... (${historyMessages.length} 条历史消息)`);

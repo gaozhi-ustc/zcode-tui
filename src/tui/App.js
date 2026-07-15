@@ -524,11 +524,22 @@ export function App({ client, sessionId, initialMessages = [] }) {
           currentModel: model,
           onSelect: async (m) => {
             try {
+              const ref = m.ref || { providerId: '', modelId: m.label };
+              // 先用 setModel 设置模型引用
               if (typeof client.setModel === 'function') {
-                // model 参数必须是 {providerId, modelId} 对象
-                await client.setModel(sessionId, m.ref || { providerId: '', modelId: m.label });
+                await client.setModel(sessionId, ref);
               }
+              // 再用 updateRuntimeModelConfig 触发 deferred model adapter 初始化
+              // （resume 后模型不可用时，app-server 延迟创建 adapter，需要这个调用激活）
+              try {
+                await client.send('session/updateRuntimeModelConfig', {
+                  sessionId,
+                  runtimeModel: ref,
+                  applyModelSelection: true,
+                });
+              } catch {}
               setModel(m.ref?.modelId || m.label);
+              setMessages(prev => [...prev, { role: 'tool', toolName: 'ModelSwitch', toolInput: {}, result: `已切换到 ${m.ref?.modelId || m.label}`, streaming: false }]);
             } catch (e) {
               setMessages(prev => [...prev, { role: 'error', text: `切换模型失败: ${e.message}` }]);
             }
