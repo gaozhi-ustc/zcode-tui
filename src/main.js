@@ -149,7 +149,14 @@ async function main() {
   const instance = render(React.createElement(App, { client, sessionId, initialMessages: historyMessages }));
 
   // 6. 退出清理
-  const cleanup = async () => { instance.unmount(); await client.disconnect(); process.exit(0); };
+  const cleanup = async () => {
+    instance.unmount();
+    await client.disconnect();
+    // 显示 session ID，方便下次 resume
+    console.error(`\n会话已保存: ${sessionId}`);
+    console.error(`恢复命令: zcode --resume ${sessionId}`);
+    process.exit(0);
+  };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
   client.on('exit', () => { console.error('app-server 意外退出'); process.exit(1); });
