@@ -85,6 +85,16 @@ function buildRuleContent(input) {
   return {};
 }
 
+/** 从消息列表找最后一条 streaming 的 tool 消息的工具名。 */
+function getLastStreamingToolName(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'tool' && messages[i].streaming) {
+      return messages[i].toolName || null;
+    }
+  }
+  return null;
+}
+
 const DOUBLE_PRESS_TIMEOUT_MS = 800;
 
 export function App({ client, sessionId, initialMessages = [] }) {
@@ -474,10 +484,14 @@ export function App({ client, sessionId, initialMessages = [] }) {
     React.createElement(StatusBar, { model, mode, sessionId, status, turnNumber, usage }),
     React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
     // Spinner 行：agent 工作时显示动画 + 动词 + 耗时 + token（对齐 Claude Code）
+    // 从 messages 提取当前执行的工具名和是否有活跃工具
     React.createElement(Spinner, {
       active: isRunning && !dialogActive && !modelPickerOpen,
       startTime: turnStartTime,
       responseLength,
+      usage,
+      currentToolName: getLastStreamingToolName(messages),
+      hasActiveTools: messages.some(m => m.role === 'tool' && m.streaming),
     }),
     // 模型选择面板（/model 无参数时弹出，优先级最高）
     modelPickerOpen

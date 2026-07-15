@@ -1,7 +1,9 @@
 import React, { useState, useEffect, memo } from 'react';
 import { Box, Text } from 'ink';
 
-// 工具调用的闪烁加载指示器（500ms 闪烁周期，对齐 Claude Code 的 useBlink）
+// 工具调用的闪烁加载指示器（对齐 Claude Code ToolUseLoader + useBlink）。
+// 工具行用 ●（BLACK_CIRCLE）亮/灭交替，与底部 Spinner 的旋转字符系列是
+// Claude Code 的设计区分（ToolUseLoader 用 ●，SpinnerAnimationRow 用 ✳ 系列）。
 function useBlink(active) {
   const [on, setOn] = useState(true);
   useEffect(() => {
