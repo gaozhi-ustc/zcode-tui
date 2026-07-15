@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 
 const OPTIONS = [
   { value: 'yes', label: '允许 (y)', key: 'y' },
+  { value: 'yes-always', label: '本工具总允许 (a)', key: 'a' },
   { value: 'no', label: '拒绝 (n)', key: 'n' },
 ];
 
@@ -25,6 +26,8 @@ export function PermissionDialog({ toolName, detail, input, reason, queueIndex, 
   useInput((inputKey, key) => {
     if (inputKey === 'y' || inputKey === 'Y' || key.return) {
       onDecide('yes');
+    } else if (inputKey === 'a' || inputKey === 'A') {
+      onDecide('yes-always');
     } else if (inputKey === 'n' || inputKey === 'N' || key.escape) {
       onDecide('no');
     } else if (key.leftArrow || inputKey === 'h') {

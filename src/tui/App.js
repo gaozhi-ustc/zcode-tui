@@ -5,6 +5,7 @@ import { MessageList } from './MessageList.js';
 import { InputBox } from './InputBox.js';
 import { ToolUse } from './components/ToolUse.js';
 import { PermissionDialog } from './components/PermissionDialog.js';
+import { QuestionDialog } from './components/QuestionDialog.js';
 import { parseEvent } from '../zcode-client.js';
 
 // Normalize whatever the client emits on 'event' into a parsed event object.
@@ -78,6 +79,8 @@ export function App({ client, sessionId }) {
   const [usage, setUsage] = useState(null);
   // 权限请求队列
   const [permissionQueue, setPermissionQueue] = useState([]);
+  // 用户提问请求队列（对齐 AskUserQuestion：问题文本 + 选项列表）
+  const [questionQueue, setQuestionQueue] = useState([]);
   const { exit } = useApp();
 
   const isRunning = status === 'running';
@@ -169,6 +172,23 @@ export function App({ client, sessionId }) {
           riskLevel: params.riskLevel,
           detail: formatPermissionDetail(params),
         }]);
+      } else if (parsed && parsed.type === 'user-input-request') {
+        // 对齐 Claude Code 的 AskUserQuestion：渲染问题文本 + 选项列表。
+        // 之前这里没有分支，导致后端发起提问时前端无任何 UI——
+        // 用户只看到工具被调用，却看不到问题和选项。
+        const params = msg.params || {};
+        // 兼容两种字段命名：questions 数组 或 单个 question
+        const questions = params.questions
+          || (params.question ? [{
+            header: params.header,
+            question: params.question,
+            options: params.options || [],
+            multiSelect: !!params.multiSelect,
+          }] : []);
+        setQuestionQueue(q => [...q, {
+          rpcId: msg.id,
+          questions,
+        }]);
       }
     };
     client.on('server-request', onServerRequest);
@@ -188,8 +208,8 @@ export function App({ client, sessionId }) {
   useInput((input, key) => {
     if (input !== '\x03') return;
     const now = Date.now();
-    // 权限对话框打开时，Ctrl+C 不退出（归对话框处理）
-    if (permissionQueue.length > 0) return;
+    // 权限/提问对话框打开时，Ctrl+C 不退出（归对话框处理）
+    if (permissionQueue.length > 0 || questionQueue.length > 0) return;
     if (isRunning) {
       if (typeof client.stop === 'function') client.stop(sessionId).catch(() => {});
       setStatus('idle');
@@ -205,8 +225,8 @@ export function App({ client, sessionId }) {
   });
 
   const handleSubmit = async (text) => {
-    // 权限对话框打开时禁用输入提交
-    if (permissionQueue.length > 0) return;
+    // 权限/提问对话框打开时禁用输入提交
+    if (permissionQueue.length > 0 || questionQueue.length > 0) return;
     setMessages(prev => [...prev, { role: 'user', text }]);
     setScrollOffset(0);
     if (text.startsWith('/')) {
@@ -260,12 +280,59 @@ export function App({ client, sessionId }) {
     setPermissionQueue(q => q.slice(1));
     try {
       if (typeof client.respondToServer === 'function') {
-        // decision: 'yes'→'allow', 'no'→'deny'（对齐 app-server 的 Ux schema）
-        const mapped = decision === 'yes' ? 'allow' : 'deny';
-        client.respondToServer(current.rpcId, { decision: mapped });
+        if (decision === 'yes-always') {
+          // "本工具后续全部允许"：带 permissionUpdates 持久化规则，
+          // server 后续对该工具不再弹窗（对齐 app-server 的 addRules 机制）
+          client.respondToServer(current.rpcId, {
+            decision: 'allow',
+            permissionUpdates: [{
+              type: 'addRules',
+              behavior: 'allow',
+              rules: [{ toolName: current.toolName }],
+            }],
+          });
+        } else {
+          // decision: 'yes'→'allow', 'no'→'deny'
+          const mapped = decision === 'yes' ? 'allow' : 'deny';
+          client.respondToServer(current.rpcId, { decision: mapped });
+        }
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'error', text: `权限响应失败: ${e.message}` }]);
+    }
+  };
+
+  // 提问响应：把用户对每个问题的回答回复给 server。
+  // answers 形如 { [question文本]: label | label[] }，统一转成数组便于 server 解析。
+  const handleQuestionRespond = (answers) => {
+    const current = questionQueue[0];
+    if (!current) return;
+    setQuestionQueue(q => q.slice(1));
+    try {
+      if (typeof client.respondToServer === 'function') {
+        // 统一成 { questionText: [answers...] } 格式
+        const normalized = {};
+        for (const [k, v] of Object.entries(answers || {})) {
+          normalized[k] = Array.isArray(v) ? v : [v];
+        }
+        client.respondToServer(current.rpcId, { answers: normalized });
+      }
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'error', text: `提问响应失败: ${e.message}` }]);
+    }
+  };
+
+  // 取消提问：回复 cancel
+  const handleQuestionCancel = () => {
+    const current = questionQueue[0];
+    if (!current) return;
+    setQuestionQueue(q => q.slice(1));
+    try {
+      if (typeof client.respondToServer === 'function') {
+        client.respondToServer(current.rpcId, { cancelled: true });
+      }
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'error', text: `提问取消失败: ${e.message}` }]);
     }
   };
 
@@ -285,8 +352,8 @@ export function App({ client, sessionId }) {
       ? '[Ctrl+C] 中断当前任务'
       : permissionQueue.length > 0
         ? (permissionQueue.length > 1
-            ? `[y] 允许  [n] 拒绝  (第 1/${permissionQueue.length} 个权限请求)`
-            : '[y] 允许  [n] 拒绝')
+            ? `[y] 允许  [a] 本工具总允许  [n] 拒绝  (第 1/${permissionQueue.length} 个权限请求)`
+            : '[y] 允许  [a] 本工具总允许  [n] 拒绝')
         : '[Ctrl+C×2] quit  [/quit] quit  [/clear] 清屏')
   );
 }
