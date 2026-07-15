@@ -117,20 +117,68 @@ export function App({ client, sessionId }) {
         });
         setScrollOffset(0);
       } else if (evt.type === 'tool-call') {
-        // 添加工具调用消息（进行中状态）
-        setMessages(prev => [...prev, {
-          role: 'tool',
-          toolName: evt.toolName,
-          toolInput: evt.toolInput,
-          toolCallId: evt.toolCallId,
-          result: null,
-          streaming: true,
-        }]);
+        // 工具调用：按 toolCallId 去重。app-server 可能对同一次调用发多条事件，
+        // 已存在则更新（而非新增），避免重复渲染。
+        setMessages(prev => {
+          const id = evt.toolCallId;
+          if (id != null) {
+            // 精确匹配已存在的同 id 工具调用
+            const idx = prev.findIndex(m => m.role === 'tool' && m.toolCallId === id);
+            if (idx !== -1) {
+              const updated = [...prev];
+              updated[idx] = {
+                ...prev[idx],
+                toolName: evt.toolName || prev[idx].toolName,
+                toolInput: evt.toolInput || prev[idx].toolInput,
+                streaming: true,
+              };
+              return updated;
+            }
+          }
+          // 无 id 时兜底：合并到最后一条同名且 streaming 的 tool 消息
+          if (id == null) {
+            for (let i = prev.length - 1; i >= 0; i--) {
+              if (prev[i].role === 'tool' && prev[i].streaming &&
+                  prev[i].toolName === evt.toolName) {
+                const updated = [...prev];
+                updated[i] = {
+                  ...prev[i],
+                  toolInput: evt.toolInput || prev[i].toolInput,
+                };
+                return updated;
+              }
+            }
+          }
+          // 新工具调用
+          return [...prev, {
+            role: 'tool',
+            toolName: evt.toolName,
+            toolInput: evt.toolInput,
+            toolCallId: id,
+            result: null,
+            streaming: true,
+          }];
+        });
         setScrollOffset(0);
       } else if (evt.type === 'tool-result') {
-        // 更新对应的工具调用消息为已完成
+        // 工具结果：按 toolCallId 精确匹配对应的工具调用消息
         setMessages(prev => {
-          // 找最后一条匹配的 tool 消息
+          const id = evt.toolCallId;
+          // 优先按 id 精确匹配
+          if (id != null) {
+            const idx = prev.findIndex(m => m.role === 'tool' && m.toolCallId === id);
+            if (idx !== -1) {
+              const updated = [...prev];
+              updated[idx] = {
+                ...prev[idx],
+                result: evt.result,
+                error: evt.error,
+                streaming: false,
+              };
+              return updated;
+            }
+          }
+          // 兜底：找最后一条 streaming 的 tool 消息
           for (let i = prev.length - 1; i >= 0; i--) {
             if (prev[i].role === 'tool' && prev[i].streaming) {
               const updated = [...prev];
