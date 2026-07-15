@@ -160,6 +160,23 @@ export function App({ client, sessionId }) {
           }];
         });
         setScrollOffset(0);
+      } else if (evt.type === 'tool-progress') {
+        // 工具执行进度：更新对应工具调用的进度信息（耗时、输出摘要）
+        setMessages(prev => {
+          const id = evt.toolCallId;
+          if (id == null) return prev;
+          const idx = prev.findIndex(m => m.role === 'tool' && m.toolCallId === id);
+          if (idx === -1) return prev;
+          const updated = [...prev];
+          updated[idx] = {
+            ...prev[idx],
+            elapsedMs: evt.elapsedMs,
+            stdoutTail: evt.stdoutTail,
+            stderrTail: evt.stderrTail,
+            outputBytes: evt.outputBytes,
+          };
+          return updated;
+        });
       } else if (evt.type === 'tool-result') {
         // 工具结果：按 toolCallId 精确匹配对应的工具调用消息
         setMessages(prev => {
@@ -387,21 +404,35 @@ export function App({ client, sessionId }) {
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(StatusBar, { model, mode, sessionId, status, turnNumber, usage }),
     React.createElement(MessageList, { messages, scrollOffset, setScrollOffset }),
-    permissionQueue.length > 0
-      ? React.createElement(PermissionDialog, {
-          toolName: permissionQueue[0].toolName || 'unknown',
-          detail: permissionQueue[0].detail,
-          queueIndex: 1,
-          queueTotal: permissionQueue.length,
-          onDecide: handlePermissionDecide,
+    // 交互层：权限请求 > 用户提问 > 输入框。三者互斥（对齐 Claude Code 的
+    // PermissionRequest 优先占满交互区，AskUserQuestion 走同一通道）。
+    // 之前 QuestionDialog 从未被渲染——三元只看 permissionQueue，导致
+    // 后端发起提问时前端既无问题面板、也无输入框，用户完全看不到问题。
+    questionQueue.length > 0
+      ? React.createElement(QuestionDialog, {
+          questions: questionQueue[0].questions || [],
+          onRespond: handleQuestionRespond,
+          onCancel: handleQuestionCancel,
         })
-      : React.createElement(InputBox, { onSubmit: handleSubmit }),
+      : permissionQueue.length > 0
+        ? React.createElement(PermissionDialog, {
+            toolName: permissionQueue[0].toolName || 'unknown',
+            detail: permissionQueue[0].detail,
+            queueIndex: 1,
+            queueTotal: permissionQueue.length,
+            onDecide: handlePermissionDecide,
+          })
+        : React.createElement(InputBox, { onSubmit: handleSubmit }),
     React.createElement(Text, { dimColor: true }, isRunning
       ? '[Ctrl+C] 中断当前任务'
-      : permissionQueue.length > 0
-        ? (permissionQueue.length > 1
-            ? `[y] 允许  [a] 本工具总允许  [n] 拒绝  (第 1/${permissionQueue.length} 个权限请求)`
-            : '[y] 允许  [a] 本工具总允许  [n] 拒绝')
-        : '[Ctrl+C×2] quit  [/quit] quit  [/clear] 清屏')
+      : questionQueue.length > 0
+        ? (questionQueue.length > 1
+            ? `[↑↓] 选择  [Enter] 确认  [Esc] 取消  (第 1/${questionQueue.length} 个提问)`
+            : '[↑↓] 选择  [Enter] 确认  [Esc] 取消')
+        : permissionQueue.length > 0
+          ? (permissionQueue.length > 1
+              ? `[y] 允许  [a] 本工具总允许  [n] 拒绝  (第 1/${permissionQueue.length} 个权限请求)`
+              : '[y] 允许  [a] 本工具总允许  [n] 拒绝')
+          : '[Ctrl+C×2] quit  [/quit] quit  [/clear] 清屏')
   );
 }

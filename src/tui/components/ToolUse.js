@@ -33,6 +33,16 @@ function truncate(s, max) {
   return s.length > max ? s.slice(0, max) + '…' : s;
 }
 
+/** 格式化耗时（毫秒→人类可读）。 */
+function formatElapsed(ms) {
+  if (!ms || ms < 100) return '';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const m = Math.floor(ms / 60000);
+  const s = Math.round((ms % 60000) / 1000);
+  return `${m}m${s}s`;
+}
+
 /** 摘要工具结果（截断长输出）。 */
 function summarizeResult(result, isError) {
   let text = '';
@@ -52,7 +62,7 @@ function summarizeResult(result, isError) {
  * @param {boolean} props.error - 结果是否为错误
  * @param {boolean} props.streaming - 是否在流式中
  */
-export function ToolUse({ toolName, toolInput, result, error, streaming }) {
+export function ToolUse({ toolName, toolInput, result, error, streaming, elapsedMs, stdoutTail, stderrTail, outputBytes }) {
   const inProgress = result == null && streaming !== false;
   const blink = useBlink(inProgress);
 
@@ -60,6 +70,7 @@ export function ToolUse({ toolName, toolInput, result, error, streaming }) {
   const dotColor = error ? 'red' : inProgress ? 'yellow' : 'green';
 
   const summary = summarizeInput(toolInput);
+  const elapsedStr = formatElapsed(elapsedMs);
 
   return React.createElement(
     Box,
@@ -69,7 +80,19 @@ export function ToolUse({ toolName, toolInput, result, error, streaming }) {
       { flexDirection: 'row' },
       React.createElement(Text, { color: dotColor }, dot + ' '),
       React.createElement(Text, { bold: true, color: 'cyan' }, toolName),
-      summary && React.createElement(Text, { dimColor: true }, ` ${summary}`)
+      summary && React.createElement(Text, { dimColor: true }, ` ${summary}`),
+      elapsedStr && React.createElement(Text, { dimColor: true }, ` ${elapsedStr}`)
+    ),
+    // 进度：实时输出摘要
+    inProgress && stdoutTail && React.createElement(
+      Text,
+      { dimColor: true, paddingLeft: 2 },
+      truncate(stdoutTail, 120)
+    ),
+    inProgress && stderrTail && React.createElement(
+      Text,
+      { color: 'red', paddingLeft: 2 },
+      truncate(stderrTail, 120)
     ),
     result != null && !error && React.createElement(
       Text,

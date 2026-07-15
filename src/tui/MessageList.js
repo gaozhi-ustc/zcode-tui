@@ -41,6 +41,10 @@ export function MessageList({ messages, scrollOffset = 0, setScrollOffset }) {
         result: m.result,
         error: m.error,
         streaming: m.streaming,
+        elapsedMs: m.elapsedMs,
+        stdoutTail: m.stdoutTail,
+        stderrTail: m.stderrTail,
+        outputBytes: m.outputBytes,
       });
     }
     if (m.role === 'error') {

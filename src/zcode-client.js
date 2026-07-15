@@ -5,41 +5,62 @@ import { EventEmitter } from 'node:events';
 const DEFAULT_CMD = 'node';
 const DEFAULT_ARGS = ['/opt/ZCode/resources/glm/zcode.cjs', 'app-server'];
 
-/** 把原始 server 消息解析为高层事件对象。 */
+/**
+ * 把原始 server 消息解析为高层事件对象。
+ *
+ * session/event 的事件类型在 params.type 字段（如 "tool_call_started"），
+ * payload 在 params.payload。已从 app-server 源码确认完整事件类型枚举：
+ * turn_started / model_streaming / model_complete / tool_call_scheduled /
+ * tool_call_started / tool_call_progress / tool_call_result / tool_call_error /
+ * tool_batch_complete / turn_complete 等。
+ */
 export function parseEvent(raw) {
   if (raw.method === 'state.updated') {
     return { type: 'state', patch: raw.params.patch, sessionId: raw.params.sessionId, scope: raw.params.scope };
   }
   if (raw.method === 'session/event') {
-    const p = raw.params.payload || {};
-    // 工具调用开始：payload 含 toolCall / tool_use / toolName 字段
-    if (p.toolCall || p.tool_use || p.toolName) {
-      const tc = p.toolCall || p.tool_use || {};
-      return {
-        type: 'tool-call',
-        toolName: p.toolName || tc.name || tc.toolName || 'unknown',
-        toolInput: p.toolInput || tc.input || tc.arguments || tc.params || {},
-        toolCallId: p.toolCallId || tc.id,
-        assistantMessageId: p.assistantMessageId,
-        turnNumber: p.turnNumber,
-      };
+    const eventType = raw.params?.type;
+    const p = raw.params?.payload || {};
+
+    switch (eventType) {
+      // 文本流式输出
+      case 'model_streaming':
+        return { type: 'text', text: p.content || p.text || '', assistantMessageId: p.assistantMessageId, querySource: p.querySource };
+      case 'model_complete':
+        return { type: 'text', text: p.content || p.text || '', assistantMessageId: p.assistantMessageId, querySource: p.querySource };
+
+      // Turn 生命周期
+      case 'turn_started':
+        return { type: 'turn-start', input: p.input, turnNumber: p.turnNumber };
+      case 'turn_complete':
+        return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber };
+
+      // 工具调用
+      case 'tool_call_scheduled':
+        return { type: 'tool-call', toolName: p.toolName, toolInput: p.input || p.toolInput, toolCallId: p.toolCallId, phase: 'scheduled' };
+      case 'tool_call_started':
+        return { type: 'tool-call', toolName: p.toolName, toolInput: p.input || p.toolInput, toolCallId: p.toolCallId, phase: 'started', startedAt: p.startedAt };
+      case 'tool_call_progress':
+        return { type: 'tool-progress', toolName: p.toolName, toolCallId: p.toolCallId, elapsedMs: p.elapsedMs, stdoutTail: p.stdoutTail, stderrTail: p.stderrTail, outputBytes: p.outputBytes };
+      case 'tool_call_result':
+        return { type: 'tool-result', toolCallId: p.toolCallId, toolName: p.toolName, result: p.result, error: p.result?.success === false, duration: p.duration };
+      case 'tool_call_error':
+        return { type: 'tool-result', toolCallId: p.toolCallId, toolName: p.toolName, result: p.error || p.message, error: true };
+      case 'tool_batch_complete':
+        return { type: 'tool-batch-complete' };
     }
-    // 工具调用结果
-    if (p.toolResult || p.tool_result) {
-      const tr = p.toolResult || p.tool_result || {};
-      return {
-        type: 'tool-result',
-        toolCallId: p.toolCallId || tr.toolCallId || tr.id,
-        toolName: p.toolName || tr.name || tr.toolName,
-        result: tr.result ?? tr.output ?? tr.content ?? p.result,
-        error: tr.error || tr.isError,
-        turnNumber: p.turnNumber,
-      };
+
+    // 兜底：旧格式兼容（无 type 字段时按 payload 内容推断）
+    if (p.content != null && p.querySource) {
+      return { type: 'text', text: p.content, querySource: p.querySource, assistantMessageId: p.assistantMessageId };
     }
-    if (p.content != null && p.querySource) return { type: 'text', text: p.content, querySource: p.querySource, assistantMessageId: p.assistantMessageId };
-    if (p.response != null) return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber };
-    if (p.input != null) return { type: 'turn-start', input: p.input, turnNumber: p.turnNumber };
-    return { type: 'raw', payload: p };
+    if (p.response != null) {
+      return { type: 'turn-complete', response: p.response, turnNumber: p.turnNumber };
+    }
+    if (p.input != null) {
+      return { type: 'turn-start', input: p.input, turnNumber: p.turnNumber };
+    }
+    return { type: 'raw', eventType, payload: p };
   }
   if (raw.method === 'interaction/requestPermission') {
     return { type: 'permission', requestId: raw.params?.requestId, ...raw.params };
