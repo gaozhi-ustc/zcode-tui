@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Text, Box, useInput, useStdout } from 'ink';
 import { Markdown, StreamingMarkdown } from './markdown/Markdown.js';
 import { ToolUse } from './components/ToolUse.js';

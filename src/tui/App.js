@@ -85,6 +85,7 @@ export function App({ client, sessionId }) {
 
   const isRunning = status === 'running';
   const firstCtrlCRef = useRef(0);
+  const lastProgressRef = useRef(0);
 
   useEffect(() => {
     const onEvent = (raw) => {
@@ -161,7 +162,10 @@ export function App({ client, sessionId }) {
         });
         setScrollOffset(0);
       } else if (evt.type === 'tool-progress') {
-        // 工具执行进度：更新对应工具调用的进度信息（耗时、输出摘要）
+        // 工具执行进度：节流更新（高频 stdout 会触发大量事件）
+        const now = Date.now();
+        if (now - lastProgressRef.current < 200) return; // 最多 5 次/秒
+        lastProgressRef.current = now;
         setMessages(prev => {
           const id = evt.toolCallId;
           if (id == null) return prev;

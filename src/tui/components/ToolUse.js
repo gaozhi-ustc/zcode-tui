@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { Box, Text } from 'ink';
 
 // 工具调用的闪烁加载指示器（500ms 闪烁周期，对齐 Claude Code 的 useBlink）
@@ -6,7 +6,7 @@ function useBlink(active) {
   const [on, setOn] = useState(true);
   useEffect(() => {
     if (!active) { setOn(true); return; }
-    const timer = setInterval(() => setOn(v => !v), 500);
+    const timer = setInterval(() => setOn(v => !v), 800);
     return () => clearInterval(timer);
   }, [active]);
   return on;
@@ -62,7 +62,7 @@ function summarizeResult(result, isError) {
  * @param {boolean} props.error - 结果是否为错误
  * @param {boolean} props.streaming - 是否在流式中
  */
-export function ToolUse({ toolName, toolInput, result, error, streaming, elapsedMs, stdoutTail, stderrTail, outputBytes }) {
+export const ToolUse = memo(function ToolUse({ toolName, toolInput, result, error, streaming, elapsedMs, stdoutTail, stderrTail, outputBytes }) {
   const inProgress = result == null && streaming !== false;
   const blink = useBlink(inProgress);
 
@@ -105,6 +105,6 @@ export function ToolUse({ toolName, toolInput, result, error, streaming, elapsed
       summarizeResult(result, error)
     )
   );
-}
+});
 
 export default ToolUse;
