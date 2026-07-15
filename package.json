@@ -12,11 +12,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "chalk": "^5.6.2",
     "ink": "^7.1.0",
     "ink-text-input": "^6.0.0",
-    "react": "^19.2.0"
+    "marked": "^18.0.6",
+    "react": "^19.2.0",
+    "strip-ansi": "^7.2.0",
+    "wrap-ansi": "^10.0.0"
   },
   "devDependencies": {
+    "cli-highlight": "^2.1.11",
     "ink-testing-library": "^4.0.0",
     "vitest": "^4.1.10"
   }

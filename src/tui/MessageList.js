@@ -1,5 +1,7 @@
 import React from 'react';
 import { Text, Box, useInput, useStdout } from 'ink';
+import { Markdown } from './markdown/Markdown.js';
+import { StreamingMarkdown } from './markdown/Markdown.js';
 
 // 每次翻页的行数
 const PAGE_LINES = 10;
@@ -17,16 +19,11 @@ export function MessageList({ messages, scrollOffset = 0, setScrollOffset }) {
       setScrollOffset(off => off + PAGE_LINES);
     } else if (key.pageDown) {
       setScrollOffset(off => Math.max(0, off - PAGE_LINES));
-    } else if (key.return && _.ctrl) {
-      // Ctrl+Enter 回到底部
-      setScrollOffset(0);
     }
   });
 
-  // 计算可见窗口
   const all = messages || [];
   const total = all.length;
-  // scrollOffset=0 表示看最新内容（底部）
   const endIdx = total - scrollOffset;
   const startIdx = Math.max(0, endIdx - viewHeight);
   const visible = all.slice(startIdx, endIdx > 0 ? endIdx : total);
@@ -42,10 +39,16 @@ export function MessageList({ messages, scrollOffset = 0, setScrollOffset }) {
     if (m.role === 'error') {
       return React.createElement(Text, { key: realIdx, color: 'red' }, `error: ${m.text}`);
     }
-    // assistant 消息：streaming 时显示闪烁指示
+    // assistant 消息：streaming 用 StreamingMarkdown，完成用 Markdown
     const indicator = m.streaming ? '▌' : '●';
-    return React.createElement(Text, { key: realIdx },
-      `${indicator} ${m.text || ''}`
+    const content = m.streaming
+      ? React.createElement(StreamingMarkdown, null, m.text || '')
+      : React.createElement(Markdown, null, m.text || '');
+    return React.createElement(
+      Box,
+      { key: realIdx, flexDirection: 'row' },
+      React.createElement(Text, { color: m.streaming ? 'yellow' : 'cyan' }, indicator + ' '),
+      React.createElement(Box, { flexDirection: 'column' }, content)
     );
   });
 

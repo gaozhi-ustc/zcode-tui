@@ -65,8 +65,8 @@ test('App 渲染输入区且 handleSubmit 接线 client.sendMessage', async () =
 test('App 收到 text 事件追加 assistant 消息', async () => {
   const client = makeMockClient();
   const { lastFrame } = render(React.createElement(App, { client, sessionId: 'sess_test' }));
-  client._emit('event', { type: 'text', text: 'pong' });
-  await new Promise(r => setTimeout(r, 50));
+  client._emit('event', { type: 'text', text: 'pong', assistantMessageId: 'msg-pong' });
+  await new Promise(r => setTimeout(r, 300));
   expect(lastFrame()).toContain('pong');
 });
 
@@ -74,7 +74,7 @@ test('App 收到 state 事件更新状态栏', async () => {
   const client = makeMockClient();
   const { lastFrame } = render(React.createElement(App, { client, sessionId: 'sess_test' }));
   client._emit('event', { type: 'state', patch: { status: 'running' } });
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 150));
   expect(lastFrame()).toContain('running');
 });
 
@@ -85,11 +85,11 @@ test('流式增量合并：相同 assistantMessageId 的 text 事件追加到同
   const { lastFrame } = render(React.createElement(App, { client, sessionId: 'sess_test' }));
   // 同一条消息的增量片段
   client._emit('event', { type: 'text', text: '你好', assistantMessageId: 'msg-1' });
-  await new Promise(r => setTimeout(r, 30));
+  await new Promise(r => setTimeout(r, 100));
   client._emit('event', { type: 'text', text: '世界', assistantMessageId: 'msg-1' });
-  await new Promise(r => setTimeout(r, 30));
+  await new Promise(r => setTimeout(r, 100));
   client._emit('event', { type: 'text', text: '！', assistantMessageId: 'msg-1' });
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 150));
   const frame = lastFrame();
   // 应合并为一条 "你好世界！" 而非三条独立消息
   expect(frame).toContain('你好世界！');
@@ -102,9 +102,9 @@ test('不同 assistantMessageId 的 text 事件创建新消息', async () => {
   const client = makeMockClient();
   const { lastFrame } = render(React.createElement(App, { client, sessionId: 'sess_test' }));
   client._emit('event', { type: 'text', text: '第一条', assistantMessageId: 'msg-1' });
-  await new Promise(r => setTimeout(r, 30));
+  await new Promise(r => setTimeout(r, 100));
   client._emit('event', { type: 'text', text: '第二条', assistantMessageId: 'msg-2' });
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 150));
   const frame = lastFrame();
   expect(frame).toContain('第一条');
   expect(frame).toContain('第二条');
@@ -114,10 +114,10 @@ test('turn-start 设置 running，turn-complete 回到 idle', async () => {
   const client = makeMockClient();
   const { lastFrame } = render(React.createElement(App, { client, sessionId: 'sess_test' }));
   client._emit('event', { type: 'turn-start', input: 'hi', turnNumber: 1 });
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 150));
   expect(lastFrame()).toContain('running');
   client._emit('event', { type: 'turn-complete', response: {}, turnNumber: 1 });
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 150));
   expect(lastFrame()).toContain('idle');
 });
 
@@ -128,7 +128,7 @@ test('turn-complete 后 assistant 消息标记为已完成（streaming=false）'
   await new Promise(r => setTimeout(r, 30));
   expect(lastFrame()).toContain('▌'); // streaming 中
   client._emit('event', { type: 'turn-complete', response: {}, turnNumber: 1 });
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 150));
   expect(lastFrame()).toContain('●'); // 已完成
   expect(lastFrame()).not.toContain('▌');
 });
