@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 /**
@@ -25,9 +25,11 @@ import { Box, Text, useInput } from 'ink';
  */
 export function QuestionDialog({ questions = [], onRespond, onCancel }) {
   const [qIndex, setQIndex] = useState(0);
-  const [selected, setSelected] = useState(0);          // 当前高亮的选项下标
-  const [checked, setChecked] = useState({});            // multiSelect: { [question]: Set<index> } 用对象存
-  const [answers, setAnswers] = useState({});            // 已作答的问题
+  const [selected, setSelected] = useState(0);
+  const [checked, setChecked] = useState({});
+  const [answers, setAnswers] = useState({});
+  // 防止 Enter 重复触发 onRespond（组件卸载前的同一 tick 可能多次收到按键）
+  const respondedRef = useRef(false);
 
   const question = questions[qIndex];
   if (!question) return null;
@@ -50,7 +52,9 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
   };
 
   useInput((inputKey, key) => {
+    if (respondedRef.current) return; // 已提交/取消，忽略后续按键
     if (key.escape || inputKey === '\x03') {
+      respondedRef.current = true;
       onCancel();
       return;
     }
@@ -75,19 +79,18 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
     }
     if (key.return) {
       if (isMulti) {
-        // 提交当前多选题的已勾选项；若一个都没勾，视作选当前高亮项
         const cur = checked[question.question] || [];
         const chosen = cur.length > 0 ? cur : [selected];
         const labels = chosen.map(i => options[i]?.label).filter(Boolean);
         const newAnswers = { ...answers, [question.question]: labels };
         setAnswers(newAnswers);
-        if (isLast) onRespond(newAnswers);
+        if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
         else { setQIndex(i => i + 1); setSelected(0); }
       } else {
         const label = options[selected]?.label;
         const newAnswers = { ...answers, [question.question]: label };
         setAnswers(newAnswers);
-        if (isLast) onRespond(newAnswers);
+        if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
         else { setQIndex(i => i + 1); setSelected(0); }
       }
       return;
