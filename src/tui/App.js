@@ -274,15 +274,19 @@ export function App({ client, sessionId }) {
     React.createElement(MessageList, { messages, scrollOffset, setScrollOffset }),
     permissionQueue.length > 0
       ? React.createElement(PermissionDialog, {
-          toolName: permissionQueue[0].toolName || permissionQueue[0].params?.toolName || 'unknown',
-          detail: permissionQueue[0].detail || permissionQueue[0].params?.detail,
+          toolName: permissionQueue[0].toolName || 'unknown',
+          detail: permissionQueue[0].detail,
+          queueIndex: 1,
+          queueTotal: permissionQueue.length,
           onDecide: handlePermissionDecide,
         })
       : React.createElement(InputBox, { onSubmit: handleSubmit }),
     React.createElement(Text, { dimColor: true }, isRunning
       ? '[Ctrl+C] 中断当前任务'
       : permissionQueue.length > 0
-        ? '[y] 允许  [n] 拒绝'
+        ? (permissionQueue.length > 1
+            ? `[y] 允许  [n] 拒绝  (第 1/${permissionQueue.length} 个权限请求)`
+            : '[y] 允许  [n] 拒绝')
         : '[Ctrl+C×2] quit  [/quit] quit  [/clear] 清屏')
   );
 }

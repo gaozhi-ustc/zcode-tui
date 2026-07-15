@@ -19,7 +19,7 @@ const OPTIONS = [
  * @param {string} props.reason - server 给的原因
  * @param {function} props.onDecide - 决策回调 (decision: 'yes'|'no') => void
  */
-export function PermissionDialog({ toolName, detail, input, reason, onDecide }) {
+export function PermissionDialog({ toolName, detail, input, reason, queueIndex, queueTotal, onDecide }) {
   const [selected, setSelected] = useState(0);
 
   useInput((inputKey, key) => {
@@ -50,12 +50,17 @@ export function PermissionDialog({ toolName, detail, input, reason, onDecide }) 
       marginTop: 1,
       paddingX: 1,
     },
-    // 标题行：工具名
+    // 标题行：工具名 + 队列序号
     React.createElement(
       Box,
       null,
       React.createElement(Text, { bold: true, color: borderColor }, '⚡ 权限请求: '),
-      React.createElement(Text, { bold: true }, toolName)
+      React.createElement(Text, { bold: true }, toolName),
+      queueTotal > 1 && React.createElement(
+        Text,
+        { color: borderColor, bold: true },
+        `  [${queueIndex}/${queueTotal}]`
+      )
     ),
     // 详情各行
     detailLines.map((line, i) => {
