@@ -45,6 +45,7 @@ function makeMockClient() {
     _emit: (evt, data) => handlers[evt] && handlers[evt](data),
     sendMessage: async () => 'ok',
     stop: async () => 'ok',
+    respondToServer: () => {},
     createSession: async () => 'sess_test',
     subscribe: async () => 'ok',
     isConnected: () => true

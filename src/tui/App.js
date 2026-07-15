@@ -97,14 +97,35 @@ export function App({ client, sessionId }) {
       } else if (evt.type === 'turn-complete') {
         setStatus('idle');
         setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
-      } else if (evt.type === 'permission') {
-        setPermissionQueue(q => [...q, evt]);
       }
     };
     client.on('event', onEvent);
+
+    // server 发起的请求（如 interaction/requestPermission）：
+    // server 向 client 发 {id, method, params}，client 用 {id, result} 回复。
+    // 这不是 notification，是 RPC 请求（server 是 caller）。
+    const onServerRequest = (msg) => {
+      const parsed = normalizeEvent(msg);
+      if (parsed && parsed.type === 'permission') {
+        // 保留原始 JSON-RPC id（响应用），同时存 parse 出的字段
+        setPermissionQueue(q => [...q, {
+          ...parsed,
+          rpcId: msg.id,  // JSON-RPC id，响应用
+          toolName: msg.params?.toolName || parsed.toolName || 'unknown',
+          detail: msg.params?.input?.command || msg.params?.reason || msg.params?.input?.file_path,
+        }]);
+      }
+    };
+    client.on('server-request', onServerRequest);
+
     return () => {
-      if (typeof client.removeListener === 'function') client.removeListener('event', onEvent);
-      else if (typeof client.off === 'function') client.off('event', onEvent);
+      if (typeof client.removeListener === 'function') {
+        client.removeListener('event', onEvent);
+        client.removeListener('server-request', onServerRequest);
+      } else if (typeof client.off === 'function') {
+        client.off('event', onEvent);
+        client.off('server-request', onServerRequest);
+      }
     };
   }, [client]);
 
@@ -177,14 +198,16 @@ export function App({ client, sessionId }) {
     }
   };
 
-  // 权限决策
+  // 权限决策：用 {id, result:{decision}} 回复 server 的 requestPermission 请求
   const handlePermissionDecide = async (decision) => {
     const current = permissionQueue[0];
     if (!current) return;
     setPermissionQueue(q => q.slice(1));
     try {
-      if (typeof client.respondPermission === 'function') {
-        await client.respondPermission(current.requestId, decision);
+      if (typeof client.respondToServer === 'function') {
+        // decision: 'yes'→'allow', 'no'→'deny'（对齐 app-server 的 Ux schema）
+        const mapped = decision === 'yes' ? 'allow' : 'deny';
+        client.respondToServer(current.rpcId, { decision: mapped });
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'error', text: `权限响应失败: ${e.message}` }]);

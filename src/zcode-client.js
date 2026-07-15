@@ -103,18 +103,37 @@ export class ZCodeClient extends EventEmitter {
     });
   }
 
+  /**
+   * 响应 server 发起的请求（如 interaction/requestPermission）。
+   * server 向 client 发 {id, method, params}，client 用 {id, result} 回复。
+   * @param {number} id - server 请求的 JSON-RPC id
+   * @param {object} result - 响应结果
+   */
+  respondToServer(id, result) {
+    if (this._closed) return;
+    this.proc.stdin.write(JSON.stringify({ id, result }) + '\n');
+  }
+
   /** 处理子进程的一行输出。 */
   _onLine(line) {
     let msg;
     try { msg = JSON.parse(line); } catch { return; } // 非 JSON 忽略
+    // 1. client 请求的响应（id 在 _pending 里，有 result 或 error）
     if (msg.id != null && this._pending.has(msg.id)) {
       const { resolve, reject } = this._pending.get(msg.id);
       this._pending.delete(msg.id);
       if (msg.error) reject(msg.error);
       else resolve(msg.result);
-    } else {
-      // 无匹配 id → 事件/通知(method 字段存在)
-      if (msg.method) this.emit('event', msg);
+      return;
+    }
+    // 2. server 发起的请求（有 id + method + params）——需 client 响应
+    if (msg.id != null && msg.method) {
+      this.emit('server-request', msg);
+      return;
+    }
+    // 3. server 的 notification/事件（无 id，有 method）
+    if (msg.method) {
+      this.emit('event', msg);
     }
   }
 
@@ -139,11 +158,6 @@ export class ZCodeClient extends EventEmitter {
   /** 发送用户消息(content 字段,非 message)。 */
   async sendMessage(sessionId, content) {
     return this.send('session/send', { sessionId, content });
-  }
-
-  /** 响应权限请求。 */
-  async respondPermission(requestId, decision) {
-    return this.send('interaction/respondPermission', { requestId, decision });
   }
 
   /** 中断当前会话的运行中 turn（对应 Ctrl+C 中断）。 */
