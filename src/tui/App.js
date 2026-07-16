@@ -249,14 +249,15 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
     try {
       const normalized = {};
       for (const [k, v] of Object.entries(answers || {})) normalized[k] = Array.isArray(v) ? v : [v];
-      client.respondToServer(result.rpcId, { answers: normalized });
+      // result schema (Dq): { action: "accept"|"decline"|"cancel", content?, reason? }
+      client.respondToServer(result.rpcId, { action: 'accept', content: { answers: normalized } });
     } catch (e) { addErrorMessage(`提问响应失败: ${e.message}`); }
   };
 
   const handleQuestionCancel = () => {
     const result = cancelQuestion();
     if (!result) return;
-    try { client.respondToServer(result.rpcId, { canceled: true }); }
+    try { client.respondToServer(result.rpcId, { action: 'cancel', reason: 'user cancelled' }); }
     catch (e) { addErrorMessage(`提问取消失败: ${e.message}`); }
   };
 
