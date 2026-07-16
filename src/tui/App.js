@@ -103,6 +103,13 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
         case 'clear':
           clearMessages();
           break;
+        case 'help':
+        case '?':
+          showHelp();
+          break;
+        case 'sessions':
+          await showSessions();
+          break;
       }
     } catch (e) {
       addErrorMessage(`/${name}: ${e.message}`);
@@ -152,7 +159,9 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
 
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(StatusBar, { model, mode, sessionId, status, turnNumber, usage }),
-    React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
+    React.createElement(Box, { flexGrow: 1, flexDirection: 'column', overflow: 'hidden' },
+      React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
+    ),
     React.createElement(Spinner, {
       active: isRunning && !dialogActive && !modelPickerOpen,
       startTime: turnStartTime, responseLength, usage,

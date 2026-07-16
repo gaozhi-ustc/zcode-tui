@@ -17,9 +17,9 @@ const FRAME_DIVISOR = 120; // frame = floor(time / 120)
 // 30 秒后才显示耗时和 token（SHOW_TOKENS_AFTER_MS）
 const SHOW_TOKENS_AFTER_MS = 30000;
 
-// stalled：3 秒无新 token 开始变红，2 秒线性到全红
-const STALL_THRESHOLD_MS = 3000;
-const STALL_RAMP_MS = 2000;
+// stalled：30 秒无新 token 才判定（agent 思考 3-10 秒是正常的，不应误报）
+const STALL_THRESHOLD_MS = 30000;
+const STALL_RAMP_MS = 5000;
 
 // 精选动词（从 Claude Code SPINNER_VERBS 选高频的）
 const VERBS = [
