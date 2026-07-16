@@ -103,8 +103,11 @@ export const Spinner = memo(function Spinner({
   const elapsed = time;
 
   // === 帧字符 ===
+  // 有流式输出或工具执行时，显示固定字符（不旋转），避免视觉闪烁。
+  // 纯等待（API 响应中）时才旋转动画。
+  const isWaiting = !hasActiveTools && responseLength === 0;
   const frameIdx = Math.floor(time / FRAME_DIVISOR) % SPINNER_FRAMES.length;
-  const glyph = SPINNER_FRAMES[frameIdx];
+  const glyph = isWaiting ? SPINNER_FRAMES[frameIdx] : '✳';
 
   // === 动词（工具名优先）===
   const displayVerb = currentToolName || verb;
@@ -116,14 +119,15 @@ export const Spinner = memo(function Spinner({
     ? usage.outputTokens
     : Math.round(responseLength / 4);
 
-  // 平滑递增动画
-  const gap = targetTokens - tokenCounterRef.current;
-  if (gap > 0) {
-    let increment;
-    if (gap < 70) increment = 3;
-    else if (gap < 200) increment = Math.max(8, Math.ceil(gap * 0.15));
-    else increment = 50;
-    tokenCounterRef.current = Math.min(tokenCounterRef.current + increment, targetTokens);
+  // 平滑递增只在纯等待时做（有输出时直接显示实际值，避免额外重渲染）
+  if (isWaiting) {
+    const gap = targetTokens - tokenCounterRef.current;
+    if (gap > 0) {
+      const increment = gap < 70 ? 3 : gap < 200 ? Math.max(8, Math.ceil(gap * 0.15)) : 50;
+      tokenCounterRef.current = Math.min(tokenCounterRef.current + increment, targetTokens);
+    }
+  } else {
+    tokenCounterRef.current = targetTokens;
   }
   const displayTokens = tokenCounterRef.current;
 
