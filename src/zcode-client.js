@@ -38,6 +38,16 @@ export function parseEvent(raw) {
         if (kind === 'text_delta') {
           return { type: 'text', text: p.delta || '', assistantMessageId: p.assistantMessageId };
         }
+        // 推理过程增量（reasoning tokens）
+        if (kind === 'reasoning_start') {
+          return { type: 'reasoning-start', assistantMessageId: p.assistantMessageId };
+        }
+        if (kind === 'reasoning_delta') {
+          return { type: 'reasoning', text: p.delta || '', assistantMessageId: p.assistantMessageId };
+        }
+        if (kind === 'reasoning_end') {
+          return { type: 'reasoning-end', assistantMessageId: p.assistantMessageId };
+        }
         // 工具调用完整到达（含 input）
         if (kind === 'tool_call') {
           return { type: 'tool-call', toolName: p.toolName, toolInput: p.input, toolCallId: p.toolCallId, assistantMessageId: p.assistantMessageId };

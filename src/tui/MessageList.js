@@ -57,11 +57,25 @@ export const MessageList = memo(function MessageList({ messages, scrollOffset = 
     const content = m.streaming
       ? React.createElement(StreamingMarkdown, null, m.text || '')
       : React.createElement(Markdown, null, m.text || '');
+    const reasoningBlock = m.reasoning ? (
+      m.reasoningExpanded
+        ? React.createElement(Box, { flexDirection: 'column', marginBottom: 0 },
+            React.createElement(Text, { dimColor: true, italic: true }, '∴ Thinking (Ctrl+O 折叠)'),
+            React.createElement(Box, { paddingLeft: 2 },
+              React.createElement(Markdown, null, m.reasoning)
+            )
+          )
+        : React.createElement(Text, { dimColor: true, italic: true },
+            `∴ Thinking (${m.reasoning.length} 字符, Ctrl+O 展开)`)
+    ) : null;
     return React.createElement(
       Box,
       { key: realIdx, flexDirection: 'row' },
       React.createElement(Text, { color: m.streaming ? 'yellow' : 'cyan' }, indicator + ' '),
-      React.createElement(Box, { flexDirection: 'column' }, content)
+      React.createElement(Box, { flexDirection: 'column' },
+        reasoningBlock,
+        content
+      )
     );
   });
 

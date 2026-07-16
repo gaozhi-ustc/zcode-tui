@@ -57,6 +57,30 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
       } else if (evt.type === 'text') {
         if (evt.text) setResponseLength(prev => prev + evt.text.length);
         setMessages(prev => mergeTextDelta(prev, evt));
+      } else if (evt.type === 'reasoning-start') {
+        // 推理过程开始：创建/更新一条 assistant 消息，标记有 reasoning
+        setMessages(prev => {
+          const idx = prev.findIndex(m => m.mid === evt.assistantMessageId);
+          if (idx !== -1) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], reasoning: '', reasoningExpanded: false };
+            return updated;
+          }
+          return [...prev, { role: 'assistant', text: '', mid: evt.assistantMessageId, streaming: true, reasoning: '', reasoningExpanded: false }];
+        });
+      } else if (evt.type === 'reasoning') {
+        // 推理增量：追加到对应消息的 reasoning 字段
+        setMessages(prev => {
+          const idx = prev.findIndex(m => m.mid === evt.assistantMessageId);
+          if (idx !== -1) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], reasoning: (updated[idx].reasoning || '') + evt.text };
+            return updated;
+          }
+          return prev;
+        });
+      } else if (evt.type === 'reasoning-end') {
+        // 推理结束：不特殊处理，reasoning 已存好
       } else if (evt.type === 'tool-call') {
         setMessages(prev => mergeToolCall(prev, evt));
       } else if (evt.type === 'tool-result') {
@@ -132,6 +156,20 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
 
   const clearMessages = useCallback(() => setMessages([]), []);
 
+  // 切换最后一条含 reasoning 的 assistant 消息的展开/折叠
+  const toggleReasoning = useCallback(() => {
+    setMessages(prev => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === 'assistant' && prev[i].reasoning) {
+          const updated = [...prev];
+          updated[i] = { ...prev[i], reasoningExpanded: !prev[i].reasoningExpanded };
+          return updated;
+        }
+      }
+      return prev;
+    });
+  }, []);
+
   // === 权限操作 ===
   const decidePermission = useCallback((decision) => {
     const current = permissionQueue[0];
@@ -169,6 +207,7 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
     hasActiveTools: messages.some(m => m.role === 'tool' && m.streaming),
     currentToolName: getLastStreamingToolName(messages),
     addUserMessage, addErrorMessage, clearMessages,
+    toggleReasoning,
     setModel, setStatus,
     decidePermission, respondQuestion, cancelQuestion,
   };

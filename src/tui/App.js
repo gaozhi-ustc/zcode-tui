@@ -18,6 +18,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
     permissionQueue, questionQueue, turnStartTime, responseLength,
     isRunning, hasActiveTools, currentToolName,
     addUserMessage, addErrorMessage, clearMessages,
+    toggleReasoning,
     setModel, decidePermission, respondQuestion, cancelQuestion,
   } = useSessionEvents(client, sessionId, initialMessages);
 
@@ -31,21 +32,31 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   const dialogActive = permissionQueue.length > 0 || questionQueue.length > 0;
 
   // Ctrl+C：running 时中断，idle 时双击退出
+  // Ctrl+O：切换最后一条 assistant 消息的 reasoning 展开/折叠
+  // ESC：running 时中断当前 turn
   useInput((input, key) => {
-    if (input !== '\x03') return;
-    const now = Date.now();
-    if (isRunning) {
-      if (typeof client.stop === 'function') client.stop(sessionId).catch(() => {});
-      setStatusIdle();
+    // Ctrl+C
+    if (input === '\x03') {
+      const now = Date.now();
+      if (isRunning) {
+        if (typeof client.stop === 'function') client.stop(sessionId).catch(() => {});
+        return;
+      }
+      if (now - firstCtrlCRef.current < DOUBLE_PRESS_TIMEOUT_MS) exit();
+      else firstCtrlCRef.current = now;
       return;
     }
-    if (now - firstCtrlCRef.current < DOUBLE_PRESS_TIMEOUT_MS) exit();
-    else firstCtrlCRef.current = now;
+    // Ctrl+O：切换 reasoning 展开
+    if (input === '\x0f') {
+      toggleReasoning();
+      return;
+    }
+    // ESC：running 时中断（对齐 Claude Code chat:cancel）
+    if (key.escape && isRunning) {
+      if (typeof client.stop === 'function') client.stop(sessionId).catch(() => {});
+      return;
+    }
   }, { isActive: !dialogActive });
-
-  function setStatusIdle() {
-    // 委托给 hook 的 setStatus —— 但 hook 没暴露，用 stop 的副作用
-  }
 
   const handleSubmit = async (text) => {
     if (dialogActive) return;
@@ -157,6 +168,15 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
         case 'sessions':
           await showSessions();
           break;
+        case 'think':
+        case 'thought':
+          // /think <level>：设置思考深度（none/low/medium/high）
+          if (typeof client.send === 'function') {
+            const level = arg || 'medium';
+            await client.send('session/setThoughtLevel', { sessionId, thoughtLevel: level });
+            addUserMessage(`思考深度已设置为: ${level}`);
+          }
+          break;
       }
     } catch (e) {
       addErrorMessage(`/${name}: ${e.message}`);
@@ -251,6 +271,8 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           ? (permissionQueue.length > 1
               ? `[y] 允许  [a] 本工具总允许  [n] 拒绝  (第 1/${permissionQueue.length} 个权限请求)`
               : '[y] 允许  [a] 本工具总允许  [n] 拒绝')
-          : '[Ctrl+C×2] quit  [/quit] quit  [/clear] 清屏')
+          : isRunning
+            ? '[Esc/Ctrl+C] 中断  [Ctrl+O] 思考过程  [/quit] quit'
+            : '[Ctrl+C×2] quit  [/quit] quit  [/clear] 清屏  [/help] 帮助')
   );
 }
