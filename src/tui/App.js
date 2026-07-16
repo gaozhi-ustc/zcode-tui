@@ -7,6 +7,7 @@ import { ToolUse } from './components/ToolUse.js';
 import { PermissionDialog } from './components/PermissionDialog.js';
 import { QuestionDialog } from './components/QuestionDialog.js';
 import { ModelPicker } from './components/ModelPicker.js';
+import { PluginManager } from './components/PluginManager.js';
 import { Spinner } from './components/Spinner.js';
 import { useSessionEvents, buildRuleContent } from './useSessionEvents.js';
 
@@ -25,6 +26,8 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   const [scrollOffset, setScrollOffset] = useState(0);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
+  const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
+  const [plugins, setPlugins] = useState([]);
   const { exit } = useApp();
 
   const firstCtrlCRef = useRef(0);
@@ -132,6 +135,36 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
     }
   };
 
+  // /plugins：加载插件列表并打开管理面板
+  const loadPlugins = async () => {
+    try {
+      const ws = { workspaceKey: process.cwd(), workspacePath: process.cwd() };
+      const result = await client.send('plugins/list', { workspace: ws });
+      setPlugins(result?.plugins || []);
+      setPluginManagerOpen(true);
+    } catch (e) {
+      addErrorMessage(`/plugins: ${e.message}`);
+    }
+  };
+
+  // 插件操作：enable/disable/uninstall
+  const handlePluginAction = async (action, pluginId) => {
+    try {
+      const ws = { workspaceKey: process.cwd(), workspacePath: process.cwd() };
+      if (action === 'enable' || action === 'disable') {
+        await client.send('plugins/setEnabled', { workspace: ws, pluginId, enabled: action === 'enable' });
+      } else if (action === 'uninstall') {
+        await client.send('plugins/uninstall', { workspace: ws, pluginId });
+      }
+      // 刷新列表
+      const result = await client.send('plugins/list', { workspace: ws });
+      setPlugins(result?.plugins || []);
+      addUserMessage(`插件 ${pluginId} 已${action === 'enable' ? '启用' : action === 'disable' ? '禁用' : '卸载'}`);
+    } catch (e) {
+      addErrorMessage(`插件操作失败: ${e.message}`);
+    }
+  };
+
   const handleSlashCommand = async (cmd) => {
     const parts = cmd.slice(1).split(/\s+/);
     const name = parts[0];
@@ -170,12 +203,15 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           break;
         case 'think':
         case 'thought':
-          // /think <level>：设置思考深度（none/low/medium/high）
           if (typeof client.send === 'function') {
             const level = arg || 'medium';
             await client.send('session/setThoughtLevel', { sessionId, thoughtLevel: level });
             addUserMessage(`思考深度已设置为: ${level}`);
           }
+          break;
+        case 'plugins':
+        case 'plugin':
+          await loadPlugins();
           break;
       }
     } catch (e) {
@@ -234,8 +270,14 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
       startTime: turnStartTime, responseLength, usage,
       currentToolName, hasActiveTools,
     }),
-    // 交互层：ModelPicker > QuestionDialog > PermissionDialog > InputBox
-    modelPickerOpen
+    // 交互层：PluginManager > ModelPicker > QuestionDialog > PermissionDialog > InputBox
+    pluginManagerOpen
+      ? React.createElement(PluginManager, {
+          plugins,
+          onAction: handlePluginAction,
+          onClose: () => setPluginManagerOpen(false),
+        })
+      : modelPickerOpen
       ? React.createElement(ModelPicker, {
           models: availableModels, currentModel: model,
           onSelect: async (m) => {
