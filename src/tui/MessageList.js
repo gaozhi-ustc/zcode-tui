@@ -24,8 +24,10 @@ export const MessageList = memo(function MessageList({ messages, scrollOffset = 
 
   const all = messages || [];
   const total = all.length;
+  // 按消息条数限制（每条可能多行，ink 的 flexShrink 会裁剪溢出）
+  const MAX_MESSAGES = Math.max(viewHeight, 15);
   const endIdx = total - scrollOffset;
-  const startIdx = Math.max(0, endIdx - viewHeight);
+  const startIdx = Math.max(0, endIdx - MAX_MESSAGES);
   const visible = all.slice(startIdx, endIdx > 0 ? endIdx : total);
 
   const items = visible.map((m, i) => {

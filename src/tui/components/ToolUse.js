@@ -45,6 +45,29 @@ function formatElapsed(ms) {
   return `${m}m${s}s`;
 }
 
+/**
+ * 渲染简单 diff：old 行红色 -，new 行绿色 +。
+ * 超过 5 行的 diff 折叠。
+ */
+function renderDiff(oldStr, newStr) {
+  const oldLines = (oldStr || '').split('\n').slice(0, 5);
+  const newLines = (newStr || '').split('\n').slice(0, 5);
+  const parts = [];
+  for (const line of oldLines) {
+    parts.push(React.createElement(Text, { color: 'red', key: 'o' + parts.length },
+      `- ${truncate(line, 80)}`));
+  }
+  for (const line of newLines) {
+    parts.push(React.createElement(Text, { color: 'green', key: 'n' + parts.length },
+      `+ ${truncate(line, 80)}`));
+  }
+  const totalLines = (oldStr || '').split('\n').length + (newStr || '').split('\n').length;
+  if (totalLines > 10) {
+    parts.push(React.createElement(Text, { dimColor: true, key: 'more' }, `… (${totalLines} 行变更)`));
+  }
+  return parts;
+}
+
 /** 摘要工具结果：默认折叠到 3 行 + 尾部提示总行数。 */
 function summarizeResult(result, isError) {
   let text = '';
@@ -79,6 +102,10 @@ export const ToolUse = memo(function ToolUse({ toolName, toolInput, result, erro
   const summary = summarizeInput(toolInput);
   const elapsedStr = formatElapsed(elapsedMs);
 
+  // diff 预览：Edit 工具有 old_string/new_string 时显示
+  const isEditDiff = (toolName === 'Edit' || toolName === 'FileEdit') &&
+    toolInput?.old_string != null && toolInput?.new_string != null;
+
   return React.createElement(
     Box,
     { flexDirection: 'column', paddingLeft: 1 },
@@ -89,6 +116,12 @@ export const ToolUse = memo(function ToolUse({ toolName, toolInput, result, erro
       React.createElement(Text, { bold: true, color: 'cyan' }, toolName),
       summary && React.createElement(Text, { dimColor: true }, ` ${summary}`),
       elapsedStr && React.createElement(Text, { dimColor: true }, ` ${elapsedStr}`)
+    ),
+    // diff 预览：Edit 工具显示 old→new 变更
+    isEditDiff && React.createElement(
+      Box,
+      { flexDirection: 'column', paddingLeft: 2 },
+      renderDiff(toolInput.old_string, toolInput.new_string)
     ),
     // 进度：实时输出摘要
     inProgress && stdoutTail && React.createElement(
