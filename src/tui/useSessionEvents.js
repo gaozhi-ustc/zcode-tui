@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { parseEvent } from '../zcode-client.js';
+import { classifyPermission } from './auto-mode.js';
 
 /** Normalize raw event into parsed event object. */
 function normalizeEvent(raw) {
@@ -37,6 +38,7 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   const [usage, setUsage] = useState(null);
   const [permissionQueue, setPermissionQueue] = useState([]);
   const [questionQueue, setQuestionQueue] = useState([]);
+  const [autoModeEnabled, setAutoModeEnabled] = useState(false);
   const [turnStartTime, setTurnStartTime] = useState(0);
   const [responseLength, setResponseLength] = useState(0);
   const respondedRpcIdsRef = useRef(new Set());
@@ -107,18 +109,54 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
       const parsed = normalizeEvent(msg);
       if (parsed?.type === 'permission') {
         const params = msg.params || {};
-        setPermissionQueue(q => {
-          if (q.some(item => item.rpcId === msg.id)) return q;
-          return [...q, {
-            ...parsed,
-            rpcId: msg.id,
-            toolName: params.toolName || parsed.toolName || 'unknown',
-            input: params.input,
-            reason: params.reason,
-            riskLevel: params.riskLevel,
-            detail: formatPermissionDetail(params),
-          }];
-        });
+        const permItem = {
+          ...parsed,
+          rpcId: msg.id,
+          toolName: params.toolName || parsed.toolName || 'unknown',
+          input: params.input,
+          reason: params.reason,
+          riskLevel: params.riskLevel,
+          detail: formatPermissionDetail(params),
+        };
+
+        // auto mode：先调 LLM 分类器判断，allow 则自动回复，block 则进人工队列
+        if (autoModeEnabled) {
+          classifyPermission(permItem.toolName, permItem.input, permItem.riskLevel)
+            .then(result => {
+              if (!result.shouldBlock) {
+                // 自动允许
+                client.respondToServer(msg.id, { decision: 'allow' });
+                setMessages(prev => [...prev, {
+                  role: 'tool',
+                  toolName: permItem.toolName,
+                  toolInput: permItem.input,
+                  toolCallId: permItem.rpcId,
+                  result: { success: true, content: `✓ 自动批准: ${result.reason}` },
+                  error: false,
+                  streaming: false,
+                }]);
+              } else {
+                // block：进人工授权队列
+                setPermissionQueue(q => {
+                  if (q.some(item => item.rpcId === msg.id)) return q;
+                  return [...q, permItem];
+                });
+              }
+            })
+            .catch(() => {
+              // 分类器异常 → fail-closed → 进人工队列
+              setPermissionQueue(q => {
+                if (q.some(item => item.rpcId === msg.id)) return q;
+                return [...q, permItem];
+              });
+            });
+        } else {
+          // 非 auto mode：直接进人工授权队列
+          setPermissionQueue(q => {
+            if (q.some(item => item.rpcId === msg.id)) return q;
+            return [...q, permItem];
+          });
+        }
       } else if (parsed?.type === 'user-input-request') {
         const params = msg.params || {};
         const questions = params.questions || (params.question ? [{
@@ -202,6 +240,7 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   return {
     messages, status, model, mode, turnNumber, usage,
     permissionQueue, questionQueue,
+    autoModeEnabled, setAutoModeEnabled,
     turnStartTime, responseLength,
     isRunning: status === 'running',
     hasActiveTools: messages.some(m => m.role === 'tool' && m.streaming),

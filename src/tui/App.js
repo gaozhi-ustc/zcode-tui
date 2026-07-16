@@ -16,7 +16,8 @@ const DOUBLE_PRESS_TIMEOUT_MS = 800;
 export function App({ client, sessionId, initialMessages = [], runtimeModel = null }) {
   const {
     messages, status, model, mode, turnNumber, usage,
-    permissionQueue, questionQueue, turnStartTime, responseLength,
+    permissionQueue, questionQueue, autoModeEnabled, setAutoModeEnabled,
+    turnStartTime, responseLength,
     isRunning, hasActiveTools, currentToolName,
     addUserMessage, addErrorMessage, clearMessages,
     toggleReasoning,
@@ -93,7 +94,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
     const help = [
       '**可用命令:**',
       '  `/model [名称]`  切换或选择模型（无参数弹出选择面板）',
-      '  `/mode <模式>`   切换权限模式（如 build/yolo）',
+      '  `/mode <模式>`   切换权限模式（build/yolo/edit/plan/auto）',
       '  `/compact`       压缩对话上下文',
       '  `/clear`         清空当前对话',
       '  `/sessions`      列出可恢复的历史会话',
@@ -186,7 +187,20 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           }
           break;
         case 'mode':
-          if (arg) { await client.setMode(sessionId, arg); }
+          if (arg === 'auto') {
+            // auto mode：前端 LLM 分类器自动批准权限
+            setAutoModeEnabled(prev => {
+              const next = !prev;
+              addUserMessage(next
+                ? '🤖 Auto mode 已开启：权限请求将由 LLM 自动判断（安全的自动批准，不安全的等待人工）'
+                : 'Auto mode 已关闭');
+              return next;
+            });
+          } else if (arg) {
+            // 其他模式（build/yolo/edit/plan）透传给 server
+            setAutoModeEnabled(false);
+            await client.setMode(sessionId, arg);
+          }
           break;
         case 'compact':
           if (typeof client.compact === 'function') await client.compact(sessionId);
@@ -262,7 +276,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   };
 
   return React.createElement(Box, { flexDirection: 'column' },
-    React.createElement(StatusBar, { model, mode, sessionId, status, turnNumber, usage }),
+    React.createElement(StatusBar, { model, mode: autoModeEnabled ? '🤖 auto' : mode, sessionId, status, turnNumber, usage }),
     React.createElement(Box, { flexGrow: 1, flexDirection: 'column', overflow: 'hidden' },
       React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
     ),
