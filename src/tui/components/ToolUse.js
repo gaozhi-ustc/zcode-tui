@@ -45,14 +45,19 @@ function formatElapsed(ms) {
   return `${m}m${s}s`;
 }
 
-/** 摘要工具结果（截断长输出）。 */
+/** 摘要工具结果：默认折叠到 3 行 + 尾部提示总行数。 */
 function summarizeResult(result, isError) {
   let text = '';
   if (typeof result === 'string') text = result;
   else if (Array.isArray(result)) text = result.map(r => typeof r === 'string' ? r : r?.text || JSON.stringify(r)).join('\n');
-  else if (result && typeof result === 'object') text = result.text || result.output || JSON.stringify(result);
+  else if (result && typeof result === 'object') text = result.content || result.text || result.output || JSON.stringify(result);
   else text = String(result || '');
-  return truncate(text, 200);
+  // 折叠：超过 3 行只显示前 3 行 + 提示
+  const lines = text.split('\n');
+  if (lines.length > 3) {
+    return lines.slice(0, 3).join('\n') + `\n… (${lines.length} 行, ${text.length} 字符)`;
+  }
+  return truncate(text, 300);
 }
 
 /**
