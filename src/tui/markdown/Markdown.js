@@ -39,12 +39,16 @@ function cachedLexer(content) {
 
 // 懒加载语法高亮模块
 let _highlightLoaded = false;
+const _highlightCallbacks = [];
 async function loadHighlight() {
   if (_highlightLoaded) return;
+  _highlightLoaded = true; // 防止重复加载
   try {
     const mod = await import('cli-highlight');
     setHighlightModule(mod.default || mod);
-    _highlightLoaded = true;
+    // 通知所有等待的组件重渲染
+    _highlightCallbacks.forEach(cb => cb());
+    _highlightCallbacks.length = 0;
   } catch { /* 降级纯文本 */ }
 }
 
@@ -54,9 +58,15 @@ async function loadHighlight() {
  */
 export const Markdown = memo(function Markdown({ children }) {
   const content = typeof children === 'string' ? children : '';
+  const [, setHighlightVersion] = useState(0);
 
-  // 启动时预热语法高亮
-  useEffect(() => { loadHighlight(); }, []);
+  // 启动时预热语法高亮，加载完成后重渲染以显示高亮
+  useEffect(() => {
+    if (!_highlightLoaded) {
+      _highlightCallbacks.push(() => setHighlightVersion(v => v + 1));
+      loadHighlight();
+    }
+  }, []);
 
   // 无 markdown 语法的纯文本，直接渲染
   if (content === '' || !HAS_MD_SYNTAX.test(content.slice(0, 500))) {

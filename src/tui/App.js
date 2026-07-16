@@ -74,6 +74,53 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
     }
   };
 
+  // /help：显示可用命令和快捷键
+  const showHelp = () => {
+    const help = [
+      '**可用命令:**',
+      '  `/model [名称]`  切换或选择模型（无参数弹出选择面板）',
+      '  `/mode <模式>`   切换权限模式（如 build/yolo）',
+      '  `/compact`       压缩对话上下文',
+      '  `/clear`         清空当前对话',
+      '  `/sessions`      列出可恢复的历史会话',
+      '  `/help`          显示此帮助',
+      '  `/quit`          退出',
+      '',
+      '**快捷键:**',
+      '  `Ctrl+C`         中断当前任务 / 双击退出',
+      '  `PageUp/Down`    翻看历史消息',
+      '  `Shift+Enter`    多行输入换行',
+      '  `↑/↓`            输入历史导航',
+      '  `Tab`            接受 @ 文件补全',
+    ].join('\n');
+    setMessages(prev => [...prev, { role: 'assistant', text: help, streaming: false }]);
+    setScrollOffset(0);
+  };
+
+  // /sessions：列出历史会话
+  const showSessions = async () => {
+    try {
+      if (typeof client.listSessions !== 'function') return;
+      const result = await client.listSessions();
+      const sessions = result?.sessions || result || [];
+      if (sessions.length === 0) {
+        setMessages(prev => [...prev, { role: 'assistant', text: '没有历史会话。', streaming: false }]);
+        return;
+      }
+      const lines = ['**历史会话（最近10个）:**', ...sessions.slice(0, 10).map((s, i) => {
+        const title = s.title || '(无标题)';
+        const sid = s.sessionId?.slice(0, 16) || 'unknown';
+        const date = s.updatedAt ? new Date(s.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+        const current = s.sessionId === sessionId ? ' ← 当前' : '';
+        return `  ${i + 1}. ${title}  \`${sid}...\`  ${date}${current}`;
+      }), '', '恢复命令: `zcode --resume <session-id>`'].join('\n');
+      setMessages(prev => [...prev, { role: 'assistant', text: lines, streaming: false }]);
+      setScrollOffset(0);
+    } catch (e) {
+      addErrorMessage(`/sessions: ${e.message}`);
+    }
+  };
+
   const handleSlashCommand = async (cmd) => {
     const parts = cmd.slice(1).split(/\s+/);
     const name = parts[0];

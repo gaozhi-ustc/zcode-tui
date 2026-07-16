@@ -187,8 +187,15 @@ export async function ensureHighlightReady() {
 }
 
 function formatCodeBlock(text, lang) {
-  // 同步降级：无高亮或高亮未就绪时用纯文本
-  // 异步高亮在 Markdown 组件层处理（Suspense）
+  // 优先用 cli-highlight 同步高亮（模块已加载时）
+  if (_highlightModule && lang) {
+    try {
+      if (_highlightModule.supportsLanguage(lang)) {
+        return _highlightModule.highlight(text, { language: lang }) + '\n';
+      }
+    } catch { /* 降级 */ }
+  }
+  // 降级：dim 纯文本
   return chalk.dim(text) + '\n';
 }
 
