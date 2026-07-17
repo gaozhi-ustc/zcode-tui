@@ -10,7 +10,7 @@ export const budgets = {
     spinnerStreamingMaxFps: 12,  // tick 500ms → 理论 ~2fps，留足余量
     toolBlinkMaxFramesPer5s: 25, // 3 工具 blink(1200ms) + spinner(500ms)
     burstMaxFrames: 25,          // 50 delta @10ms（500ms 窗口，30fps 上限 ~17）
-    keystrokeMaxFrames: 40,      // 20 击键 × ≤2 帧
+    keystrokeMaxFrames: 21,      // 每击键 1 帧（2026-07-17 实测 20击键=20帧达标，自 target 提升）
     resizeMaxFullClears: 2,      // 两次缩宽各一次全清
   },
   target: {
