@@ -35,6 +35,14 @@
 - 关键参考模块：`ink/`（渲染层）、`components/`（UI 组件）、`hooks/`（交互逻辑）、`keybindings/`（按键系统）、`state/`（状态管理）
 - 设计文档：`docs/superpowers/specs/2026-07-12-ssh-zcode-tui-design.md`
 
+## 闪烁测试
+
+渲染层改动必须跑 `npm test`（含 `test/flicker/` 帧度量回归网）；
+涉及擦除/清屏/滚动行为的改动还应跑 `npm run test:pty`。
+帧数/擦除量基线在 `test/flicker/baselines/`，超 20% 即回归失败；
+有意的渲染变更用 `UPDATE_BASELINES=1` 重校准。
+设计文档：`docs/superpowers/specs/2026-07-17-flicker-testing-design.md`。
+
 ## Deploy 脚本
 
 - **时区参数解析规则**：deploy 脚本的时区参数按**城市名**传入（如 `Beijing`、`Shanghai`、`New York`、`Tokyo`）。

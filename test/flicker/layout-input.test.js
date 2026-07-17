@@ -45,7 +45,7 @@ test('S6b: @建议浮层出现/消失 —— 无全清', async () => {
   app.unmount();
 });
 
-test('S7: 连续 20 次击键 —— 每击键帧数 ≤2', async () => {
+test('S7: 连续 20 次击键 —— 帧数 ≤21（靶点已达标守护）', async () => {
   const client = makeMockClient();
   const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
   await flushFrames(50);
