@@ -13,7 +13,8 @@ await client.connect();
 const sessionId = await client.createSession(process.cwd());
 await client.subscribe(sessionId);
 
-render(React.createElement(App, { client, sessionId }), { exitOnCtrlC: false });
+// incrementalRendering 对齐生产（src/main.js）
+render(React.createElement(App, { client, sessionId }), { exitOnCtrlC: false, incrementalRendering: true });
 
 if (scenario === 'p3-resize') {
   // /dev/tty 即 script(1) 分配的 pty；stty 改尺寸触发 SIGWINCH

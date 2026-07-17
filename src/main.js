@@ -162,7 +162,8 @@ async function main() {
   }
 
   // 6. 渲染 TUI
-  const instance = render(React.createElement(App, { client, sessionId, initialMessages: historyMessages, runtimeModel }));
+  // incrementalRendering：行级 diff 替代整屏擦除重写，消除 tmux 下击键/流式闪烁（S8 实测擦除量 250→0）
+  const instance = render(React.createElement(App, { client, sessionId, initialMessages: historyMessages, runtimeModel }), { incrementalRendering: true });
 
   // 6. 退出清理
   let exiting = false;

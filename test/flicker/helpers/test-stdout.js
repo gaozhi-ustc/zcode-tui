@@ -69,7 +69,8 @@ export class TestStdin extends EventEmitter {
  * 与 ink-testing-library 的关键差别：保留 eraseLines/全清等擦除序列，
  * 使 frames[] 可用于闪烁度量。
  */
-export function renderInk(element, { columns = 100, rows = 30, incrementalRendering = false } = {}) {
+// incrementalRendering 默认对齐生产（src/main.js 已开启）；传 false 可测 stock 整屏重写路径
+export function renderInk(element, { columns = 100, rows = 30, incrementalRendering = true } = {}) {
   const stdout = new TestStdout({ columns, rows });
   const stderr = new TestStdout({ columns, rows });
   const stdin = new TestStdin();
