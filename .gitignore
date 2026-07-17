@@ -1,1 +1,4 @@
 node_modules/
+
+# flicker baseline self-test artifact (auto-generated, self-cleaning)
+test/flicker/baselines/unit-selftest.json
