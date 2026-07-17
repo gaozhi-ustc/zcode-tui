@@ -52,7 +52,7 @@ ZCODE_CLI_LEGACY=1 zcode --help
 ### 闪烁测试（flicker）
 
 - `npm test`：含渲染层闪烁场景（`test/flicker/`），基于帧度量探针 + 双档阈值
-- `npm run test:pty`：PTY 字节级场景（需 POSIX `script(1)`，设 `RUN_PTY=1`）
+- `npm run test:pty`：PTY 字节级场景（需 POSIX `script(1)`；script 内部已设 `RUN_PTY=1`）
 - 基线校准：度量基线存于 `test/flicker/baselines/*.json`，回归容忍 20%；
   渲染层有意变更后用 `UPDATE_BASELINES=1 npx vitest run test/flicker` 重校准并提交
 - `test.fails` 标记的用例是优化靶点，意外通过说明优化生效，应把对应阈值提升到 current 档

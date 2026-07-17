@@ -122,7 +122,7 @@ export const budgets = {
 `test/flicker/pty/`：
 - `driver.js`：ink render(App) + ZCodeClient 指向 fake server（利用 `ZCodeClient({command, args})` 注入点，无需改 main.js）
 - `fake-app-server.js`：行分隔 JSON-RPC，按内置时间线脚本应答 session 方法并推送事件
-- `run-pty.sh`：`script -qec '...' /dev/null` 包装，前置 `stty rows/cols` 设窗口尺寸
+- `pty.test.js`：内联 `spawn('script', ['-qec', cmd, '/dev/null'])` 包装（前置 `stty rows/cols` 设窗口尺寸，SCENARIO_DONE 哨兵切流）——实现时并入测试文件，未单独产出 run-pty.sh
 
 | 场景 | 操作 | 断言 |
 |---|---|---|
