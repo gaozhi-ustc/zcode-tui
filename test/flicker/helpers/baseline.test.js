@@ -1,10 +1,16 @@
-import { test, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { test, expect, beforeAll, afterAll } from 'vitest';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkBaseline } from './baseline.js';
 
 const DIR = fileURLToPath(new URL('../baselines/', import.meta.url));
+const SELFTEST_FILE = join(DIR, 'unit-selftest.json');
+
+// unit-selftest.json 是测试生成的临时产物，不纳入版本库；
+// 跑前清理确保"首次运行自动建基线"路径被真实执行，跑后清理避免污染工作区。
+beforeAll(() => rmSync(SELFTEST_FILE, { force: true }));
+afterAll(() => rmSync(SELFTEST_FILE, { force: true }));
 
 test('checkBaseline 首次运行自动建基线且不失败', () => {
   checkBaseline('unit-selftest', { frameCount: 7, fps: 3.5 });
