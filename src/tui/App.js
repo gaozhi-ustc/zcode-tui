@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { StatusBar } from './StatusBar.js';
 import { MessageList } from './MessageList.js';
 import { InputBox } from './InputBox.js';
@@ -275,7 +275,12 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
     catch (e) { addErrorMessage(`提问取消失败: ${e.message}`); }
   };
 
-  return React.createElement(Box, { flexDirection: 'column' },
+  // 根高度锁定视口行数：保证渲染输出永不超视口，从源头杜绝
+  // ink 溢出帧的整屏全清回退（tmux 下击键闪烁的根因，见 S8c）
+  const { stdout } = useStdout();
+  const termRows = stdout?.rows || 24;
+
+  return React.createElement(Box, { flexDirection: 'column', height: termRows, overflow: 'hidden' },
     React.createElement(StatusBar, { model, mode: autoModeEnabled ? '🤖 auto' : mode, sessionId, status, turnNumber, usage }),
     React.createElement(Box, { flexGrow: 1, flexDirection: 'column', overflow: 'hidden' },
       React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),

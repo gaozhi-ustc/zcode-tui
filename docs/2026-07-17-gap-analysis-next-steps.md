@@ -40,12 +40,14 @@ Claude Code 的做法：渲染层 16ms 合帧 + `useDeferredValue` 延迟消息�
 **落地**：在 hook 内做 16-32ms 的 delta 缓冲合并（或 React `useDeferredValue`），
 把 S2-target（≤10 帧）翻转为硬断言。收益与方向 1 叠加，改动小、只动一个文件。
 
-### 方向 3：消息区按行预算裁剪（消灭溢出全清）
+### 方向 3：消息区按行预算裁剪（消灭溢出全清）—— ✅ 已完成（2026-07-18）
 
-`MessageList` 按消息**条数**截断（MAX_MESSAGES = max(viewHeight, 15)），单条多行消息直接顶爆视口
-触发 ink 全清（S3 实测 1 次 `\x1b[2J`，PTY 层实测 2 次）。
-**落地**：按**渲染行数**做预算裁剪（从尾部向前累计行数至 viewHeight），
-把 S3 的 fullClearCount 基线从 1 压到 0。这是全清类闪烁的最大单点来源。
+`MessageList` 原按消息**条数**截断，长会话输出超视口 → ink 溢出回退每帧全清+全量重写
+（tmux 现场实测：击键 2 帧 × 7KB，每帧 1 次 `\x1b[2J`），且 incrementalRendering 在溢出态被旁路。
+**已落地**：App 根 Box 锁定 `stdout.rows` + overflow hidden；MessageList 改按**渲染行数预算**
+从尾部裁剪（`estimateMessageLines` 按 stringWidth 折算，超高单条截断文本保留尾部）。
+验证：S8c（溢出历史击键零全清）+ S3/P2 基线 fullClearCount 归 0；真实 tmux 复测击键 785 字节、
+零全清、帧大小 ~157B。注意：ink 的 overflow 裁剪只切底部，flex-end 无效，故采用文本截断而非铺底。
 
 ### 方向 4：修复探索中发现的正确性 bug（低成本高确定性）
 

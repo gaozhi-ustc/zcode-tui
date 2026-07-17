@@ -64,6 +64,37 @@ test('S8: 满屏历史下击键 —— 每次击键整屏重写，但实际只�
   checkBaseline('s8-typing-default', m);
 });
 
+test('S8c: 溢出历史（长会话现场）击键 —— 零全清、零整屏擦除', async () => {
+  // 复现 tmux 现场：历史远超视口（40 行 > rows=20）时，
+  // ink 溢出回退每帧 ESC[2J 全清+全量重写（现场实测每击键 2 帧 × 7KB）。
+  // 修复：App 根高度锁定 rows + 消息区行预算裁剪 → 输出永不超视口。
+  const client = makeMockClient();
+  const longHistory = [
+    { role: 'user', text: '初始问题' },
+    { role: 'assistant', text: Array.from({ length: 40 }, (_, i) => `历史行-${i}`).join('\n') },
+  ];
+  const app = renderInk(
+    React.createElement(App, { client, sessionId: 'sess_test', initialMessages: longHistory }),
+    { columns: 100, rows: 20 },
+  );
+  await flushFrames(50);
+  // 内容正确性：最新消息尾部在视口内可见（flex-end 锁定最新内容）
+  expect(app.stdout.frames.join('')).toContain('历史行-39');
+  app.stdout.frames.length = 0;
+
+  for (let i = 0; i < 5; i++) {
+    app.stdin.write('x');
+    await flushFrames(50);
+  }
+
+  const m = measureFrames(app.stdout.frames, { durationMs: 250 });
+  expect(m.fullClearCount).toBe(0);        // 修复前：每帧 1 次全清
+  expect(m.eraseLinesTotal).toBe(0);       // 修复前：整屏 eraseLines
+  expect(app.frames.join('')).toContain('xxxxx'); // 输入内容正常
+  checkBaseline('s8c-overflow-typing', m);
+  app.unmount();
+});
+
 test('S8b: incrementalRendering 对照 —— 擦除量应大幅下降（修复方向验证）', async () => {
   const def = await runTyping({ incrementalRendering: false });
   const inc = await runTyping({ incrementalRendering: true });
