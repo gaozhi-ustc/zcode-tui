@@ -5,6 +5,10 @@ import { expect } from 'vitest';
 
 const BASELINE_DIR = fileURLToPath(new URL('../baselines/', import.meta.url));
 
+// 各度量的绝对宽限（加在 基线×tolerance 之上）：
+// layoutShifts 在增量渲染下对部分帧的行数边界（尾换行）敏感，0/1 抖动属噪声
+const SLACK = { layoutShifts: 1 };
+
 /**
  * 基线快照断言：数字型度量 ≤ 基线 × tolerance。
  * 基线不存在时自动记录并直接通过；UPDATE_BASELINES=1 时重写全部基线。
@@ -26,7 +30,7 @@ export function checkBaseline(name, metrics, { tolerance = 1.2 } = {}) {
 
   for (const [key, value] of Object.entries(flat)) {
     if (!(key in baseline)) continue;
-    const limit = baseline[key] * tolerance;
+    const limit = baseline[key] * tolerance + (SLACK[key] ?? 0);
     expect(
       value,
       `[${name}] ${key}: 实测 ${value} 超过 基线 ${baseline[key]} × ${tolerance} = ${limit}`,
