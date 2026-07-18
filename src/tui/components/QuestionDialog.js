@@ -23,6 +23,14 @@ import { Box, Text, useInput } from 'ink';
  *                                         answers 形如 { [question文本]: label | label[] }
  * @param {function} props.onCancel      - () => void
  */
+/** 选项显示文本：label 缺失时兜底 name/title/value/字符串本身（真实 server 的
+ * 选项 schema 可能不带 label，现场出现过选项行空白、用户无法确认选择）。 */
+function optionLabel(opt) {
+  if (typeof opt === 'string') return opt;
+  if (!opt || typeof opt !== 'object') return '';
+  return opt.label ?? opt.name ?? opt.title ?? opt.value ?? '';
+}
+
 export function QuestionDialog({ questions = [], onRespond, onCancel }) {
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState(0);
@@ -81,13 +89,13 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
       if (isMulti) {
         const cur = checked[question.question] || [];
         const chosen = cur.length > 0 ? cur : [selected];
-        const labels = chosen.map(i => options[i]?.label).filter(Boolean);
+        const labels = chosen.map(i => optionLabel(options[i])).filter(Boolean);
         const newAnswers = { ...answers, [question.question]: labels };
         setAnswers(newAnswers);
         if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
         else { setQIndex(i => i + 1); setSelected(0); }
       } else {
-        const label = options[selected]?.label;
+        const label = optionLabel(options[selected]);
         const newAnswers = { ...answers, [question.question]: label };
         setAnswers(newAnswers);
         if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
@@ -153,6 +161,7 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
         const isChecked = isMulti && checkedArr.includes(i);
         const pointer = isSel ? '❯' : ' ';
         const check = isMulti ? (isChecked ? '◉' : '◯') : (isSel ? '●' : '○');
+        const label = optionLabel(opt);
         return React.createElement(
           Box,
           { key: i, flexDirection: 'column' },
@@ -160,10 +169,13 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
             Box,
             null,
             React.createElement(Text, { color: isSel ? 'cyan' : undefined, bold: isSel }, `${pointer} ${check} `),
+            // 选中项用反色（背景色）高亮，任何终端/tmux 下都清晰可见
             React.createElement(
               Text,
-              { bold: isSel, color: isSel ? 'cyan' : undefined },
-              opt.label
+              isSel
+                ? { bold: true, color: 'black', backgroundColor: 'cyan' }
+                : {},
+              ` ${label} `
             )
           ),
           opt.description && React.createElement(
