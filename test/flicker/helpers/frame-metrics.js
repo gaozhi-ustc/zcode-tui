@@ -32,14 +32,17 @@ export function countLayoutShifts(frames) {
 }
 
 /**
- * 稳定区违规：lineSelector 选中的行（如已完成消息）在相邻帧间内容变化的次数。
- * 正常应为 0 —— 历史消息行不应被后续渲染改动。
+ * 稳定区违规：lineSelector 选中的行（如已完成消息）内容被改写的次数。
+ * 增量渲染的部分帧合法地不含未变化行（选中为空），跳过不计；
+ * 只在选中非空的帧之间比较 —— 捕获的是“历史行被重写且内容改变”这类真 bug。
+ * （历史行被整帧抹除由 fullClearCount 指标覆盖）
  */
 export function stableLineViolations(frames, lineSelector) {
   let violations = 0;
   let prev = null;
   for (const f of frames) {
     const selected = visibleLines(f).filter(lineSelector).join('\n');
+    if (selected === '') continue; // 增量部分帧未含该行，跳过
     if (prev !== null && selected !== prev) violations++;
     prev = selected;
   }
