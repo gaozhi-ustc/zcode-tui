@@ -31,6 +31,14 @@ function runScenario() {
     notify('model.streaming', { kind: 'text_delta', delta: longText, assistantMessageId: 'm1' });
     notify('turn.completed', { turnNumber: 1 });
     setTimeout(() => process.stderr.write('SCENARIO_DONE\n'), 1000);
+  } else if (scenario === 'p5-question') {
+    // 对齐现场：turn 运行中收到提问；客户端响应后 2s 模型才反馈
+    notify('turn.started', { turnNumber: 1 });
+    notify('model.streaming', { kind: 'text_delta', delta: '工作中…\n\n', assistantMessageId: 'm0' });
+    send({ jsonrpc: '2.0', id: 99, method: 'interaction/requestUserInput', params: {
+      requestId: 'q1',
+      questions: [{ header: 'Review', question: 'Proceed with plan?', options: [{ label: 'Approve' }, { label: 'Reject' }] }],
+    } });
   } else if (scenario === 'p3-resize') {
     notify('turn.started', { turnNumber: 1 });
     setTimeout(() => {
@@ -48,6 +56,13 @@ rl.on('line', (line) => {
   } else if (msg.method === 'session/subscribe') {
     send({ jsonrpc: '2.0', id: msg.id, result: {} });
     setTimeout(runScenario, 300);
+  } else if (msg.id === 99) {
+    // 客户端已响应提问 → 2s 后模型才反馈（现场时序）
+    process.stderr.write('ANSWER_RECEIVED\n');
+    setTimeout(() => {
+      notify('model.streaming', { kind: 'text_delta', delta: '模型反馈MARKER', assistantMessageId: 'm1' });
+      setTimeout(() => process.stderr.write('SCENARIO_DONE\n'), 1000);
+    }, 2000);
   } else if (msg.id != null) {
     send({ jsonrpc: '2.0', id: msg.id, result: {} });
   }

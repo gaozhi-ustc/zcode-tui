@@ -212,7 +212,11 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   const decidePermission = useCallback((decision) => {
     const current = permissionQueue[0];
     if (!current) return null;
-    if (respondedRpcIdsRef.current.has(current.rpcId)) return null;
+    if (respondedRpcIdsRef.current.has(current.rpcId)) {
+      // 重放的已响应请求：出队避免对话框卡死，但不重复回复
+      setPermissionQueue(q => q.slice(1));
+      return null;
+    }
     respondedRpcIdsRef.current.add(current.rpcId);
     setPermissionQueue(q => q.slice(1));
     return { rpcId: current.rpcId, decision, toolName: current.toolName, input: current.input };
@@ -222,7 +226,11 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   const respondQuestion = useCallback((answers) => {
     const current = questionQueue[0];
     if (!current) return null;
-    if (respondedRpcIdsRef.current.has(current.rpcId)) return null;
+    if (respondedRpcIdsRef.current.has(current.rpcId)) {
+      // 重放的已响应请求：出队避免对话框卡死，但不重复回复
+      setQuestionQueue(q => q.slice(1));
+      return null;
+    }
     respondedRpcIdsRef.current.add(current.rpcId);
     setQuestionQueue(q => q.slice(1));
     return { rpcId: current.rpcId, answers };
@@ -231,7 +239,10 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   const cancelQuestion = useCallback(() => {
     const current = questionQueue[0];
     if (!current) return null;
-    if (respondedRpcIdsRef.current.has(current.rpcId)) return null;
+    if (respondedRpcIdsRef.current.has(current.rpcId)) {
+      setQuestionQueue(q => q.slice(1));
+      return null;
+    }
     respondedRpcIdsRef.current.add(current.rpcId);
     setQuestionQueue(q => q.slice(1));
     return { rpcId: current.rpcId };

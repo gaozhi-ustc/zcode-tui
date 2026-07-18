@@ -311,12 +311,16 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           onCancel: () => setModelPickerOpen(false),
         })
       : questionQueue.length > 0
+        // key=rpcId：强制每个请求重挂载，否则 React 复用实例导致
+        // 对话框内部 respondedRef 残留 true，第二个请求按键全失效（现场 bug）
         ? React.createElement(QuestionDialog, {
+            key: questionQueue[0].rpcId,
             questions: questionQueue[0].questions || [],
             onRespond: handleQuestionRespond, onCancel: handleQuestionCancel,
           })
         : permissionQueue.length > 0
           ? React.createElement(PermissionDialog, {
+              key: permissionQueue[0].rpcId,
               toolName: permissionQueue[0].toolName || 'unknown',
               detail: permissionQueue[0].detail,
               queueIndex: 1, queueTotal: permissionQueue.length,

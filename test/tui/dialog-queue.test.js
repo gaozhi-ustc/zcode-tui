@@ -1,0 +1,116 @@
+import React from 'react';
+import { test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderInk, flushFrames } from '../flicker/helpers/test-stdout.js';
+import { App } from '../../src/tui/App.js';
+
+/**
+ * 连续对话框可答性回归测试。
+ * 现场 bug：第一个提问回答后，第二个相同的提问对话框弹出，
+ * 但 Enter/Esc 完全无效 —— QuestionDialog 的 respondedRef（useRef(false)）
+ * 在 React 复用组件实例时持续为 true（组件同类型同位置，未重挂载）。
+ * 修复：对话框按 rpcId 作 key 强制重挂载。
+ */
+
+function makeClient() {
+  const handlers = {};
+  const responded = [];
+  return {
+    on: (evt, fn) => { handlers[evt] = fn; },
+    off: () => {},
+    removeListener: () => {},
+    _emit: (evt, data) => handlers[evt] && handlers[evt](data),
+    sendMessage: async () => 'ok',
+    stop: async () => 'ok',
+    respondToServer: (id, result) => { responded.push({ id, result }); },
+    responded,
+    createSession: async () => 'sess_test',
+    subscribe: async () => 'ok',
+    isConnected: () => true,
+  };
+}
+
+function questionRequest(id, q) {
+  return {
+    jsonrpc: '2.0', id,
+    method: 'interaction/requestUserInput',
+    params: { requestId: `r${id}`, questions: [{ question: q, options: [{ label: 'Approve' }, { label: 'Reject' }] }] },
+  };
+}
+
+function permissionRequest(id, toolName) {
+  return {
+    jsonrpc: '2.0', id,
+    method: 'interaction/requestPermission',
+    params: { toolName, input: { command: 'ls' }, reason: 'test', riskLevel: 'low' },
+  };
+}
+
+beforeEach(() => { vi.useFakeTimers(); });
+afterEach(() => { vi.useRealTimers(); });
+
+// ink 的渲染 throttle 与 fake timers 的交互对大步进不可靠：
+// 分 3 小步推进，确保对话框帧落地（其 useInput 注册）后再注入按键
+async function settle() {
+  for (let i = 0; i < 3; i++) await flushFrames(60);
+}
+
+
+test('连续两个提问：第二个对话框的 Enter 必须有效', async () => {
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  client._emit('server-request', questionRequest(101, '问题一?'));
+  await settle();
+  app.stdin.write('\r'); // Enter
+  await settle();
+  expect(client.responded.map(r => r.id)).toContain(101);
+
+  client._emit('server-request', questionRequest(102, '问题二?'));
+  await settle();
+  app.stdin.write('\r'); // 第二个 Enter —— 修复前被 respondedRef 吞掉
+  await settle();
+  expect(client.responded.map(r => r.id)).toContain(102);
+  app.unmount();
+});
+
+test('连续两个权限请求：第二个对话框的 y 必须有效', async () => {
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  client._emit('server-request', permissionRequest(201, 'Bash'));
+  await settle();
+  app.stdin.write('y');
+  await settle();
+  expect(client.responded.map(r => r.id)).toContain(201);
+
+  client._emit('server-request', permissionRequest(202, 'Read'));
+  await settle();
+  app.stdin.write('y'); // 修复前被 decidedRef 吞掉
+  await settle();
+  expect(client.responded.map(r => r.id)).toContain(202);
+  app.unmount();
+});
+
+test('重放的已响应请求：出队但不重复回复（防止卡死）', async () => {
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  client._emit('server-request', questionRequest(101, '问题一?'));
+  await settle();
+  app.stdin.write('\r');
+  await settle();
+  expect(client.responded.filter(r => r.id === 101).length).toBe(1);
+
+  // server 重放同一 rpcId（如重连后重发）：再次弹出
+  client._emit('server-request', questionRequest(101, '问题一?'));
+  await settle();
+  app.stdin.write('\r');
+  await settle();
+  // 不重复回复，但对话框必须消失（出队）——检查末帧而非累计帧
+  expect(client.responded.filter(r => r.id === 101).length).toBe(1);
+  expect(app.stdout.frames.at(-1)).not.toContain('问题一?');
+  app.unmount();
+});
