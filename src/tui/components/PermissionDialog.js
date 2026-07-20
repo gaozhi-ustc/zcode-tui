@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 const OPTIONS = [
@@ -22,18 +22,15 @@ const OPTIONS = [
  */
 export function PermissionDialog({ toolName, detail, input, reason, queueIndex, queueTotal, onDecide }) {
   const [selected, setSelected] = useState(0);
-  const decidedRef = useRef(false);
 
+  // 防重由 useSessionEvents 的 respondedRpcIdsRef 统一负责，
+  // 组件内 useRef guard 会随实例复用残留导致按键全失效（曾致现场死锁）
   useInput((inputKey, key) => {
-    if (decidedRef.current) return;
     if (inputKey === 'y' || inputKey === 'Y' || key.return) {
-      decidedRef.current = true;
       onDecide('yes');
     } else if (inputKey === 'a' || inputKey === 'A') {
-      decidedRef.current = true;
       onDecide('yes-always');
     } else if (inputKey === 'n' || inputKey === 'N' || key.escape) {
-      decidedRef.current = true;
       onDecide('no');
     } else if (key.leftArrow || inputKey === 'h') {
       setSelected(s => Math.max(0, s - 1));

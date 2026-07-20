@@ -107,6 +107,9 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
     // server 发起的请求（权限/提问）
     const onServerRequest = (msg) => {
       const parsed = normalizeEvent(msg);
+      // 已响应请求的重播（broker 每 1s reannounce）直接忽略：
+      // 否则回答后重播会复活对话框，且因 respondedRef 残留形成永久死锁（现场 bug）
+      if (msg?.id != null && respondedRpcIdsRef.current.has(msg.id)) return;
       if (parsed?.type === 'permission') {
         const params = msg.params || {};
         const permItem = {

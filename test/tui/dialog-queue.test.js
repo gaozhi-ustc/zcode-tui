@@ -97,6 +97,32 @@ test('连续两个权限请求：第二个对话框的 y 必须有效', async ()
   app.unmount();
 });
 
+test('重 announce 竞态：回答后 1s 内重发同 id 请求不得复活对话框（现场死锁）', async () => {
+  // server 的 interaction broker 每 1s 重播未决请求（reannounceIntervalMs=1000）。
+  // 现场：Enter 回答（出队+响应已发）后，同 id 重播在渲染前重新入队，
+  // 对话框从未卸载（respondedRef 卡 true）→ 永久卡死。
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  client._emit('server-request', questionRequest(101, '问题一?'));
+  await settle();
+  app.stdin.write('\r'); // Enter：回答
+  // 关键：在同一 flush 窗口内重播同 id 请求（竞态复现）
+  client._emit('server-request', questionRequest(101, '问题一?'));
+  await settle();
+
+  // 对话框必须消失且不再复活；响应只发一次
+  expect(app.stdout.frames.at(-1)).not.toContain('╭');
+  expect(client.responded.filter(r => r.id === 101).length).toBe(1);
+
+  // 再按 Enter 也不应有任何效果（对话框已不存在）
+  app.stdin.write('\r');
+  await settle();
+  expect(client.responded.filter(r => r.id === 101).length).toBe(1);
+  app.unmount();
+});
+
 test('重放的已响应请求：出队但不重复回复（防止卡死）', async () => {
   const client = makeClient();
   const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
@@ -108,13 +134,10 @@ test('重放的已响应请求：出队但不重复回复（防止卡死）', as
   await settle();
   expect(client.responded.filter(r => r.id === 101).length).toBe(1);
 
-  // server 重放同一 rpcId（如重连后重发）：再次弹出
+  // server 重播同一 rpcId（broker reannounce / 重连重发）：直接忽略，不再弹出
   client._emit('server-request', questionRequest(101, '问题一?'));
   await settle();
-  app.stdin.write('\r');
-  await settle();
-  // 不重复回复，但对话框必须消失（出队）——检查末帧而非累计帧
+  expect(app.stdout.frames.at(-1)).not.toContain('╭');
   expect(client.responded.filter(r => r.id === 101).length).toBe(1);
-  expect(app.stdout.frames.at(-1)).not.toContain('问题一?');
   app.unmount();
 });

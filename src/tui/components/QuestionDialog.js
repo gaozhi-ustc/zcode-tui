@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 /**
@@ -44,8 +44,9 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
   const [selected, setSelected] = useState(0);
   const [checked, setChecked] = useState({});
   const [answers, setAnswers] = useState({});
-  // 防止 Enter 重复触发 onRespond（组件卸载前的同一 tick 可能多次收到按键）
-  const respondedRef = useRef(false);
+  // 注意：不要在这里加 useRef 防重 guard —— 对话框按 rpcId key 重挂载前，
+  // React 复用实例会让 guard 残留 true 吞掉后续所有按键（曾致现场死锁）。
+  // 防重由 useSessionEvents 的 respondedRpcIdsRef 统一负责。
 
   const question = questions[qIndex];
   if (!question) return null;
@@ -68,9 +69,7 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
   };
 
   useInput((inputKey, key) => {
-    if (respondedRef.current) return; // 已提交/取消，忽略后续按键
     if (key.escape || inputKey === '\x03') {
-      respondedRef.current = true;
       onCancel();
       return;
     }
@@ -100,13 +99,13 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
         const labels = chosen.map(i => optionValue(options[i])).filter(Boolean);
         const newAnswers = { ...answers, [question.question]: labels };
         setAnswers(newAnswers);
-        if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
+        if (isLast) { onRespond(newAnswers); }
         else { setQIndex(i => i + 1); setSelected(0); }
       } else {
         const label = optionValue(options[selected]);
         const newAnswers = { ...answers, [question.question]: label };
         setAnswers(newAnswers);
-        if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
+        if (isLast) { onRespond(newAnswers); }
         else { setQIndex(i => i + 1); setSelected(0); }
       }
       return;
