@@ -63,6 +63,10 @@ test('连续两个提问：第二个对话框的 Enter 必须有效', async () =
   client._emit('server-request', questionRequest(101, '问题一?'));
   await settle();
   app.stdin.write('\r'); // Enter
+  await flushFrames(60);
+  // 确认后对话框必须立即消失（单帧内），不等 server/模型反馈
+  // （回显消息 'user: 问题一?: Approve' 会保留问题文本，故检查对话框边框）
+  expect(app.stdout.frames.at(-1)).not.toContain('╭');
   await settle();
   expect(client.responded.map(r => r.id)).toContain(101);
 

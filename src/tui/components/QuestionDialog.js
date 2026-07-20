@@ -194,16 +194,25 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
         );
       })
     ),
-    // 帮助提示
+    // 操作提示：确认/取消用高亮 chip，用户一眼可辨当前可用动作
     React.createElement(
       Box,
       { marginTop: 1 },
       React.createElement(
         Text,
+        { backgroundColor: 'cyan', color: 'black', bold: true },
+        ` Enter ${isMulti ? (isLast ? '提交' : '下一题') : (isLast ? '确认' : '下一题')} `
+      ),
+      React.createElement(Text, null, '  '),
+      React.createElement(
+        Text,
+        { backgroundColor: 'red', color: 'black' },
+        ' Esc 取消 '
+      ),
+      React.createElement(
+        Text,
         { dimColor: true },
-        isMulti
-          ? `[Space] 勾选  [Enter] ${isLast ? '提交' : '下一题'}  [↑↓] 移动  [Esc] 取消`
-          : `[Enter] ${isLast ? '确认' : '下一题'}  [↑↓] 移动  ${!isLast ? '[Tab] 跳过  ' : ''}[Esc] 取消`
+        `   [↑↓] 移动${isMulti ? '  [Space] 勾选' : ''}${!isLast && !isMulti ? '  [Tab] 跳过' : ''}`
       )
     )
   );

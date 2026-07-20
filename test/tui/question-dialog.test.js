@@ -31,6 +31,19 @@ test('选中项使用反色高亮（背景色），与未选中项视觉可区�
   app.unmount();
 });
 
+test('底部 确认/取消 动作用高亮 chip 呈现', async () => {
+  const app = renderInk(React.createElement(QuestionDialog, {
+    questions: QUESTIONS, onRespond: () => {}, onCancel: () => {},
+  }));
+  await flushFrames(100);
+  const out = app.stdout.frames.join('');
+  expect(out).toContain('确认');
+  expect(out).toContain('取消');
+  expect(out).toMatch(/\x1b\[46m/); // 确认 chip：青底
+  expect(out).toMatch(/\x1b\[41m/); // 取消 chip：红底
+  app.unmount();
+});
+
 test('回答提交 option.value 而非 label（server 以 value 判定 plan 审批）', async () => {
   // server 的 plan 审批选项 {label:'Approve', value:'approve'}，
   // 期望值恰好是 'approve'；回 label 'Approve' 会被判 deny（现场 plan mode 卡死）

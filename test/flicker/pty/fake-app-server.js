@@ -32,12 +32,15 @@ function runScenario() {
     notify('turn.completed', { turnNumber: 1 });
     setTimeout(() => process.stderr.write('SCENARIO_DONE\n'), 1000);
   } else if (scenario === 'p5-question') {
-    // 对齐现场：turn 运行中收到提问；客户端响应后 2s 模型才反馈
+    // 对齐现场：长历史（溢出视口）+ turn 运行中收到提问；客户端响应后 2s 模型才反馈
     notify('turn.started', { turnNumber: 1 });
-    notify('model.streaming', { kind: 'text_delta', delta: '工作中…\n\n', assistantMessageId: 'm0' });
+    const longText = Array.from({ length: 50 }, (_, i) => `历史行-${i}`).join('\n');
+    notify('model.streaming', { kind: 'text_delta', delta: longText, assistantMessageId: 'm0' });
+    notify('model.streaming', { kind: 'tool_call', toolName: 'Write', input: { file_path: '/tmp/x.sh' }, toolCallId: 'tw1' });
+    // 与 server KAo 完全一致的计划审批问题形状
     send({ jsonrpc: '2.0', id: 99, method: 'interaction/requestUserInput', params: {
       requestId: 'q1',
-      questions: [{ header: 'Review', question: 'Proceed with plan?', options: [{ label: 'Approve' }, { label: 'Reject' }] }],
+      questions: [{ header: 'Plan', question: 'Review this implementation plan.', options: [{ label: 'Approve', value: 'approve', description: 'Exit plan mode and start implementation.' }] }],
     } });
   } else if (scenario === 'p3-resize') {
     notify('turn.started', { turnNumber: 1 });
