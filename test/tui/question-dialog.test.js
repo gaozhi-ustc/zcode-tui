@@ -31,6 +31,25 @@ test('选中项使用反色高亮（背景色），与未选中项视觉可区�
   app.unmount();
 });
 
+test('回答提交 option.value 而非 label（server 以 value 判定 plan 审批）', async () => {
+  // server 的 plan 审批选项 {label:'Approve', value:'approve'}，
+  // 期望值恰好是 'approve'；回 label 'Approve' 会被判 deny（现场 plan mode 卡死）
+  let submitted = null;
+  const planQ = [{
+    header: 'Plan',
+    question: 'Review this implementation plan.',
+    options: [{ label: 'Approve', value: 'approve', description: 'Exit plan mode and start implementation.' }],
+  }];
+  const app = renderInk(React.createElement(QuestionDialog, {
+    questions: planQ, onRespond: (a) => { submitted = a; }, onCancel: () => {},
+  }));
+  await flushFrames(100);
+  app.stdin.write('\r');
+  await flushFrames(100);
+  expect(submitted?.['Review this implementation plan.']).toBe('approve');
+  app.unmount();
+});
+
 test('选项 label 缺失时兜底显示 name/value/string，不留空白行', async () => {
   const weird = [{
     question: '兜底?',

@@ -31,6 +31,14 @@ function optionLabel(opt) {
   return opt.label ?? opt.name ?? opt.title ?? opt.value ?? '';
 }
 
+/** 选项提交值：server 以 value 判定回答（如 plan 审批期望 'approve'），
+ * 缺 value 时退回显示文本（AskUserQuestion 的 value 就等于 label）。 */
+function optionValue(opt) {
+  if (typeof opt === 'string') return opt;
+  if (!opt || typeof opt !== 'object') return '';
+  return opt.value ?? optionLabel(opt);
+}
+
 export function QuestionDialog({ questions = [], onRespond, onCancel }) {
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState(0);
@@ -89,13 +97,13 @@ export function QuestionDialog({ questions = [], onRespond, onCancel }) {
       if (isMulti) {
         const cur = checked[question.question] || [];
         const chosen = cur.length > 0 ? cur : [selected];
-        const labels = chosen.map(i => optionLabel(options[i])).filter(Boolean);
+        const labels = chosen.map(i => optionValue(options[i])).filter(Boolean);
         const newAnswers = { ...answers, [question.question]: labels };
         setAnswers(newAnswers);
         if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
         else { setQIndex(i => i + 1); setSelected(0); }
       } else {
-        const label = optionLabel(options[selected]);
+        const label = optionValue(options[selected]);
         const newAnswers = { ...answers, [question.question]: label };
         setAnswers(newAnswers);
         if (isLast) { respondedRef.current = true; onRespond(newAnswers); }
