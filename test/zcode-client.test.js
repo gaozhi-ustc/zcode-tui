@@ -5,18 +5,32 @@ import { once, EventEmitter } from 'node:events';
 
 // 模拟 app-server:一个读 stdin 写 stdout 的 node 脚本
 const MOCK_SERVER = `
-const readline = require('readline');
-const rl = readline.createInterface({ input: process.stdin });
-rl.on('line', (line) => {
+const fs = require('node:fs');
+const chunk = Buffer.alloc(4096);
+let buffer = '';
+
+function handleLine(line) {
   const msg = JSON.parse(line);
   if (msg.method === 'session/list') {
-    process.stdout.write(JSON.stringify({id: msg.id, result: {sessions: [{sessionId: 'sess_mock'}]}}) + '\\n');
+    fs.writeSync(1, JSON.stringify({id: msg.id, result: {sessions: [{sessionId: 'sess_mock'}]}}) + '\\n');
   }
   // 不识别的方法回错误
   else if (msg.method) {
-    process.stdout.write(JSON.stringify({id: msg.id, error: {code: -32601, message: 'mock: ' + msg.method}}) + '\\n');
+    fs.writeSync(1, JSON.stringify({id: msg.id, error: {code: -32601, message: 'mock: ' + msg.method}}) + '\\n');
   }
-});
+}
+
+for (;;) {
+  const bytesRead = fs.readSync(0, chunk, 0, chunk.length, null);
+  if (bytesRead === 0) break;
+  buffer += chunk.toString('utf8', 0, bytesRead);
+  let idx;
+  while ((idx = buffer.indexOf('\\n')) !== -1) {
+    const line = buffer.slice(0, idx);
+    buffer = buffer.slice(idx + 1);
+    if (line) handleLine(line);
+  }
+}
 `;
 
 let clients = [];

@@ -8,6 +8,8 @@ if [ -z "$ZCODE_TUI_DIR" ] || [ ! -d "$ZCODE_TUI_DIR/src" ]; then
   SELF_DIR="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)"
   if [ -f "$SELF_DIR/../src/main.js" ]; then
     ZCODE_TUI_DIR="$(cd "$SELF_DIR/.." && pwd)"
+  elif [ -d "/opt/zcode-tui/src" ]; then
+    ZCODE_TUI_DIR="/opt/zcode-tui"
   elif [ -d "$HOME/zcode-tui/src" ]; then
     ZCODE_TUI_DIR="$HOME/zcode-tui"
   else
@@ -19,7 +21,19 @@ fi
 # 查找引擎路径（优先级：env > local > /opt）
 ZCODE_ENGINE="${ZCODE_ENGINE_PATH:-}"
 [ -f "$ZCODE_ENGINE" ] || ZCODE_ENGINE="$HOME/.local/share/zcode/zcode.cjs"
+[ -f "$ZCODE_ENGINE" ] || ZCODE_ENGINE="/opt/zcode-engine/zcode.cjs"
 [ -f "$ZCODE_ENGINE" ] || ZCODE_ENGINE="/opt/ZCode/resources/glm/zcode.cjs"
+export ZCODE_ENGINE_PATH="$ZCODE_ENGINE"
+
+# node:sqlite 在 Node 22/23 仍为实验特性，引擎依赖它，须显式启用 flag（Node 24+ 起免 flag）。
+# 用 NODE_OPTIONS 而非 CLI flag，可同时覆盖 login/logout/legacy 的直接 engine 调用与 TUI spawn 的子进程。
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$NODE_MAJOR" -ge 22 ] 2>/dev/null && [ "$NODE_MAJOR" -lt 24 ]; then
+  case " ${NODE_OPTIONS:-} " in
+    *" --experimental-sqlite "*) ;;
+    *) export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--experimental-sqlite" ;;
+  esac
+fi
 
 # === 子命令拦截 ===
 case "${1:-}" in

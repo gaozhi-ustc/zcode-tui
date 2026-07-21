@@ -151,7 +151,6 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
         }
         // auto mode：先调 LLM 分类器判断，allow 则自动回复，block 则进人工队列
         else if (autoModeEnabled) {
-        if (autoModeEnabled) {
           classifyPermission(permItem.toolName, permItem.input, permItem.riskLevel)
             .then(result => {
               if (!result.shouldBlock) {

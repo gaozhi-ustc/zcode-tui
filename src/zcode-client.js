@@ -7,18 +7,26 @@ import { join } from 'node:path';
 
 const DEFAULT_CMD = 'node';
 
-/** 查找引擎路径：env > ~/.local/share/zcode > /opt/ZCode */
+/** 查找引擎路径：env > ~/.local/share/zcode > /opt/zcode-engine > /opt/ZCode */
 function findEnginePath() {
   if (process.env.ZCODE_ENGINE_PATH && existsSync(process.env.ZCODE_ENGINE_PATH)) {
     return process.env.ZCODE_ENGINE_PATH;
   }
   const localPath = join(homedir(), '.local', 'share', 'zcode', 'zcode.cjs');
   if (existsSync(localPath)) return localPath;
+  const systemPath = '/opt/zcode-engine/zcode.cjs';
+  if (existsSync(systemPath)) return systemPath;
   const optPath = '/opt/ZCode/resources/glm/zcode.cjs';
   return optPath;
 }
 
-const DEFAULT_ARGS = [findEnginePath(), 'app-server'];
+function getNodeEngineFlags(nodeVersion = process.versions.node) {
+  const major = Number(nodeVersion.split('.')[0]);
+  // node:sqlite 在 Node 22/23 仍为实验特性，引擎依赖它，须显式启用 flag（Node 24+ 起免 flag）
+  return major >= 22 && major < 24 ? ['--experimental-sqlite'] : [];
+}
+
+const DEFAULT_ARGS = [...getNodeEngineFlags(), findEnginePath(), 'app-server'];
 
 /**
  * 把原始 server 消息解析为高层事件对象。
