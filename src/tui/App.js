@@ -17,6 +17,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   const {
     messages, status, model, mode, turnNumber, usage,
     permissionQueue, questionQueue, autoModeEnabled, setAutoModeEnabled,
+    yoloModeEnabled, setYoloModeEnabled,
     turnStartTime, responseLength,
     isRunning, hasActiveTools, currentToolName,
     addUserMessage, addErrorMessage, clearMessages,
@@ -187,17 +188,31 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           }
           break;
         case 'mode':
-          if (arg === 'auto') {
+          if (arg === 'yolo') {
+            // yolo mode：所有权限请求自动批准（不调 LLM，最快）
+            setYoloModeEnabled(prev => {
+              const next = !prev;
+              if (next) {
+                setAutoModeEnabled(false);
+                addUserMessage('🔥 YOLO mode 已开启：所有权限请求将自动批准（无需确认）');
+              } else {
+                addUserMessage('YOLO mode 已关闭');
+              }
+              return next;
+            });
+          } else if (arg === 'auto') {
             // auto mode：前端 LLM 分类器自动批准权限
+            setYoloModeEnabled(false);
             setAutoModeEnabled(prev => {
               const next = !prev;
               addUserMessage(next
-                ? '🤖 Auto mode 已开启：权限请求将由 LLM 自动判断（安全的自动批准，不安全的等待人工）'
+                ? '🤖 Auto mode 已开启：权限请求将由 LLM 自动判断'
                 : 'Auto mode 已关闭');
               return next;
             });
           } else if (arg) {
-            // 其他模式（build/yolo/edit/plan）透传给 server
+            // 其他模式（build/edit/plan）透传给 server
+            setYoloModeEnabled(false);
             setAutoModeEnabled(false);
             await client.setMode(sessionId, arg);
           }
@@ -281,7 +296,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   const termRows = stdout?.rows || 24;
 
   return React.createElement(Box, { flexDirection: 'column', height: termRows, overflow: 'hidden' },
-    React.createElement(StatusBar, { model, mode: autoModeEnabled ? '🤖 auto' : mode, sessionId, status, turnNumber, usage }),
+    React.createElement(StatusBar, { model, mode: yoloModeEnabled ? '🔥 yolo' : autoModeEnabled ? '🤖 auto' : mode, sessionId, status, turnNumber, usage }),
     React.createElement(Box, { flexGrow: 1, flexDirection: 'column', overflow: 'hidden' },
       React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
     ),

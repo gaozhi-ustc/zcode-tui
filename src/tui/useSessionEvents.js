@@ -39,6 +39,7 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   const [permissionQueue, setPermissionQueue] = useState([]);
   const [questionQueue, setQuestionQueue] = useState([]);
   const [autoModeEnabled, setAutoModeEnabled] = useState(false);
+  const [yoloModeEnabled, setYoloModeEnabled] = useState(false);
   const [turnStartTime, setTurnStartTime] = useState(0);
   const [responseLength, setResponseLength] = useState(0);
   const respondedRpcIdsRef = useRef(new Set());
@@ -135,7 +136,21 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
           detail: formatPermissionDetail(params),
         };
 
+        // yolo mode：全部自动批准（不调 LLM，最快）
+        if (yoloModeEnabled) {
+          client.respondToServer(msg.id, { decision: 'allow' });
+          setMessages(prev => [...prev, {
+            role: 'tool',
+            toolName: permItem.toolName,
+            toolInput: permItem.input,
+            toolCallId: permItem.rpcId,
+            result: { success: true, content: '✓ yolo 自动批准' },
+            error: false,
+            streaming: false,
+          }]);
+        }
         // auto mode：先调 LLM 分类器判断，allow 则自动回复，block 则进人工队列
+        else if (autoModeEnabled) {
         if (autoModeEnabled) {
           classifyPermission(permItem.toolName, permItem.input, permItem.riskLevel)
             .then(result => {
@@ -266,6 +281,7 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
     messages, status, model, mode, turnNumber, usage,
     permissionQueue, questionQueue,
     autoModeEnabled, setAutoModeEnabled,
+    yoloModeEnabled, setYoloModeEnabled,
     turnStartTime, responseLength,
     isRunning: status === 'running',
     hasActiveTools: messages.some(m => m.role === 'tool' && m.streaming),
