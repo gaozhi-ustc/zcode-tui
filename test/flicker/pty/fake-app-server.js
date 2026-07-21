@@ -37,8 +37,9 @@ function runScenario() {
     const longText = Array.from({ length: 50 }, (_, i) => `历史行-${i}`).join('\n');
     notify('model.streaming', { kind: 'text_delta', delta: longText, assistantMessageId: 'm0' });
     notify('model.streaming', { kind: 'tool_call', toolName: 'Write', input: { file_path: '/tmp/x.sh' }, toolCallId: 'tw1' });
-    // 与 server KAo 完全一致的计划审批问题形状；模拟 broker 每 1s 重播直到收到响应
-    const ask = () => send({ jsonrpc: '2.0', id: 99, method: 'interaction/requestUserInput', params: {
+    // 与 server KAo 完全一致的计划审批问题形状；模拟 broker 每 1s 重播且每次换新 id
+    let reqId = 900;
+    const ask = () => send({ jsonrpc: '2.0', id: reqId++, method: 'interaction/requestUserInput', params: {
       requestId: 'q1',
       questions: [{ header: 'Plan', question: 'Review this implementation plan.', options: [{ label: 'Approve', value: 'approve', description: 'Exit plan mode and start implementation.' }] }],
     } });
@@ -61,10 +62,10 @@ rl.on('line', (line) => {
   } else if (msg.method === 'session/subscribe') {
     send({ jsonrpc: '2.0', id: msg.id, result: {} });
     setTimeout(runScenario, 300);
-  } else if (msg.id === 99) {
-    // 客户端已响应提问 → 停止重播，2s 后模型才反馈（现场时序）
+  } else if (msg.id >= 900 && msg.id < 1000) {
+    // 客户端已响应提问（任一重播 id）→ 停止重播，2s 后模型才反馈（现场时序）
     clearInterval(globalThis.__reannounce);
-    process.stderr.write('ANSWER_RECEIVED\n');
+    process.stderr.write(`ANSWER_RECEIVED id=${msg.id}\n`);
     setTimeout(() => {
       notify('model.streaming', { kind: 'text_delta', delta: '模型反馈MARKER', assistantMessageId: 'm1' });
       setTimeout(() => process.stderr.write('SCENARIO_DONE\n'), 1000);

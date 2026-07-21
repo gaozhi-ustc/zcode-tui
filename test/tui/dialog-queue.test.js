@@ -97,6 +97,43 @@ test('连续两个权限请求：第二个对话框的 y 必须有效', async ()
   app.unmount();
 });
 
+test('broker 重播（每次新 id）：同内容权限请求队列不膨胀，回答发给最新 id', async () => {
+  // zcode.cjs 实锤：broker 重播时每次生成新 rpcId（server-${nextId++}，
+  // 指数退避），回答任一 id 都解析整个逻辑请求。客户端必须按内容去重，
+  // 否则队列积压成 [1/3929]（现场）。
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  client._emit('server-request', permissionRequest(301, 'Bash'));
+  client._emit('server-request', permissionRequest(302, 'Bash'));
+  client._emit('server-request', permissionRequest(303, 'Bash'));
+  await settle();
+  // 队列不得膨胀（[1/3] 徽标不应出现）
+  expect(app.stdout.frames.at(-1)).not.toContain('[1/3]');
+
+  app.stdin.write('y');
+  await settle();
+  // 回答发给最新存活的 id（303），且只发一次
+  expect(client.responded.map(r => r.id)).toEqual([303]);
+  app.unmount();
+});
+
+test('broker 重播（每次新 id）：同内容提问队列不膨胀', async () => {
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  client._emit('server-request', questionRequest(401, '问题重复?'));
+  client._emit('server-request', questionRequest(402, '问题重复?'));
+  client._emit('server-request', questionRequest(403, '问题重复?'));
+  await settle();
+  app.stdin.write('\r');
+  await settle();
+  expect(client.responded.map(r => r.id)).toEqual([403]);
+  app.unmount();
+});
+
 test('重 announce 竞态：回答后 1s 内重发同 id 请求不得复活对话框（现场死锁）', async () => {
   // server 的 interaction broker 每 1s 重播未决请求（reannounceIntervalMs=1000）。
   // 现场：Enter 回答（出队+响应已发）后，同 id 重播在渲染前重新入队，

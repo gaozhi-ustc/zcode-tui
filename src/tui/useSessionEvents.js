@@ -42,6 +42,9 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   const [turnStartTime, setTurnStartTime] = useState(0);
   const [responseLength, setResponseLength] = useState(0);
   const respondedRpcIdsRef = useRef(new Set());
+  // broker 重播每次换新 rpcId（zcode.cjs: server-${nextId++} 指数退避），
+  // 回答任一 id 都解析整个逻辑请求。按内容追踪最新 id，回答发给存活 id。
+  const latestRequestIdsRef = useRef(new Map()); // contentKey → 最新 rpcId
 
   useEffect(() => {
     const onEvent = (raw) => {
@@ -110,6 +113,16 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
       // 已响应请求的重播（broker 每 1s reannounce）直接忽略：
       // 否则回答后重播会复活对话框，且因 respondedRef 残留形成永久死锁（现场 bug）
       if (msg?.id != null && respondedRpcIdsRef.current.has(msg.id)) return;
+
+      // 同内容未决请求入队去重：重播只更新最新 rpcId，队列不膨胀
+      const enqueueUnique = (setQueue, item) => {
+        const key = requestContentKey(item);
+        latestRequestIdsRef.current.set(key, item.rpcId);
+        setQueue(q => {
+          if (q.some(i => i.rpcId === item.rpcId || requestContentKey(i) === key)) return q;
+          return [...q, item];
+        });
+      };
       if (parsed?.type === 'permission') {
         const params = msg.params || {};
         const permItem = {
@@ -140,25 +153,16 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
                 }]);
               } else {
                 // block：进人工授权队列
-                setPermissionQueue(q => {
-                  if (q.some(item => item.rpcId === msg.id)) return q;
-                  return [...q, permItem];
-                });
+                enqueueUnique(setPermissionQueue, permItem);
               }
             })
             .catch(() => {
               // 分类器异常 → fail-closed → 进人工队列
-              setPermissionQueue(q => {
-                if (q.some(item => item.rpcId === msg.id)) return q;
-                return [...q, permItem];
-              });
+              enqueueUnique(setPermissionQueue, permItem);
             });
         } else {
           // 非 auto mode：直接进人工授权队列
-          setPermissionQueue(q => {
-            if (q.some(item => item.rpcId === msg.id)) return q;
-            return [...q, permItem];
-          });
+          enqueueUnique(setPermissionQueue, permItem);
         }
       } else if (parsed?.type === 'user-input-request') {
         const params = msg.params || {};
@@ -166,10 +170,7 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
           header: params.header, question: params.question,
           options: params.options || [], multiSelect: !!params.multiSelect,
         }] : []);
-        setQuestionQueue(q => {
-          if (q.some(item => item.rpcId === msg.id)) return q;
-          return [...q, { rpcId: msg.id, questions }];
-        });
+        enqueueUnique(setQuestionQueue, { rpcId: msg.id, questions });
       }
     };
 
@@ -211,44 +212,54 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
     });
   }, []);
 
+  // 回答时使用的 rpcId：重播场景下发给最新存活 id
+  const resolveRpcId = (item) =>
+    latestRequestIdsRef.current.get(requestContentKey(item)) ?? item.rpcId;
+
   // === 权限操作 ===
   const decidePermission = useCallback((decision) => {
     const current = permissionQueue[0];
     if (!current) return null;
-    if (respondedRpcIdsRef.current.has(current.rpcId)) {
+    const rpcId = resolveRpcId(current);
+    if (respondedRpcIdsRef.current.has(rpcId) || respondedRpcIdsRef.current.has(current.rpcId)) {
       // 重放的已响应请求：出队避免对话框卡死，但不重复回复
       setPermissionQueue(q => q.slice(1));
       return null;
     }
+    respondedRpcIdsRef.current.add(rpcId);
     respondedRpcIdsRef.current.add(current.rpcId);
     setPermissionQueue(q => q.slice(1));
-    return { rpcId: current.rpcId, decision, toolName: current.toolName, input: current.input };
+    return { rpcId, decision, toolName: current.toolName, input: current.input };
   }, [permissionQueue]);
 
   // === 提问操作 ===
   const respondQuestion = useCallback((answers) => {
     const current = questionQueue[0];
     if (!current) return null;
-    if (respondedRpcIdsRef.current.has(current.rpcId)) {
+    const rpcId = resolveRpcId(current);
+    if (respondedRpcIdsRef.current.has(rpcId) || respondedRpcIdsRef.current.has(current.rpcId)) {
       // 重放的已响应请求：出队避免对话框卡死，但不重复回复
       setQuestionQueue(q => q.slice(1));
       return null;
     }
+    respondedRpcIdsRef.current.add(rpcId);
     respondedRpcIdsRef.current.add(current.rpcId);
     setQuestionQueue(q => q.slice(1));
-    return { rpcId: current.rpcId, answers };
+    return { rpcId, answers };
   }, [questionQueue]);
 
   const cancelQuestion = useCallback(() => {
     const current = questionQueue[0];
     if (!current) return null;
-    if (respondedRpcIdsRef.current.has(current.rpcId)) {
+    const rpcId = resolveRpcId(current);
+    if (respondedRpcIdsRef.current.has(rpcId) || respondedRpcIdsRef.current.has(current.rpcId)) {
       setQuestionQueue(q => q.slice(1));
       return null;
     }
+    respondedRpcIdsRef.current.add(rpcId);
     respondedRpcIdsRef.current.add(current.rpcId);
     setQuestionQueue(q => q.slice(1));
-    return { rpcId: current.rpcId };
+    return { rpcId };
   }, [questionQueue]);
 
   return {
@@ -330,6 +341,12 @@ function mergeToolResult(prev, evt) {
 }
 
 // === 权限详情格式化 ===
+
+/** 请求内容键：broker 重播（新 rpcId、同 method+params）按此去重。 */
+function requestContentKey(item) {
+  if (item?.questions) return `question:${JSON.stringify(item.questions)}`;
+  return `permission:${item?.toolName || ''}:${JSON.stringify(item?.input || {})}`;
+}
 
 function formatPermissionDetail(params) {
   const { toolName, input, reason, riskLevel } = params;
