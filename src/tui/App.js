@@ -190,26 +190,15 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
         case 'mode':
           if (arg === 'yolo') {
             // yolo mode：所有权限请求自动批准（不调 LLM，最快）
-            setYoloModeEnabled(prev => {
-              const next = !prev;
-              if (next) {
-                setAutoModeEnabled(false);
-                addUserMessage('🔥 YOLO mode 已开启：所有权限请求将自动批准（无需确认）');
-              } else {
-                addUserMessage('YOLO mode 已关闭');
-              }
-              return next;
-            });
+            setYoloModeEnabled(true);
+            setAutoModeEnabled(false);
+            if (typeof client.setMode === 'function') await client.setMode(sessionId, 'yolo');
+            addUserMessage('🔥 YOLO mode 已开启：所有权限请求将自动批准（无需确认）');
           } else if (arg === 'auto') {
             // auto mode：前端 LLM 分类器自动批准权限
             setYoloModeEnabled(false);
-            setAutoModeEnabled(prev => {
-              const next = !prev;
-              addUserMessage(next
-                ? '🤖 Auto mode 已开启：权限请求将由 LLM 自动判断'
-                : 'Auto mode 已关闭');
-              return next;
-            });
+            setAutoModeEnabled(true);
+            addUserMessage('🤖 Auto mode 已开启：权限请求将由 LLM 自动判断');
           } else if (arg) {
             // 其他模式（build/edit/plan）透传给 server
             setYoloModeEnabled(false);

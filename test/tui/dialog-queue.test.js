@@ -14,6 +14,7 @@ import { App } from '../../src/tui/App.js';
 function makeClient() {
   const handlers = {};
   const responded = [];
+  const modeChanges = [];
   return {
     on: (evt, fn) => { handlers[evt] = fn; },
     off: () => {},
@@ -23,6 +24,8 @@ function makeClient() {
     stop: async () => 'ok',
     respondToServer: (id, result) => { responded.push({ id, result }); },
     responded,
+    setMode: async (sessionId, mode) => { modeChanges.push({ sessionId, mode }); },
+    modeChanges,
     createSession: async () => 'sess_test',
     subscribe: async () => 'ok',
     isConnected: () => true,
@@ -94,6 +97,39 @@ test('连续两个权限请求：第二个对话框的 y 必须有效', async ()
   app.stdin.write('y'); // 修复前被 decidedRef 吞掉
   await settle();
   expect(client.responded.map(r => r.id)).toContain(202);
+  app.unmount();
+});
+
+test('/mode yolo 后权限请求必须自动批准，不弹授权对话框', async () => {
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  app.stdin.write('/mode yolo');
+  await settle();
+  app.stdin.write('\r');
+  await settle();
+  expect(client.modeChanges).toEqual([{ sessionId: 'sess_test', mode: 'yolo' }]);
+
+  client._emit('server-request', permissionRequest(501, 'Bash'));
+  await settle();
+  expect(client.responded).toEqual([{ id: 501, result: { decision: 'allow' } }]);
+  expect(app.stdout.frames.at(-1)).not.toContain('权限请求');
+  app.unmount();
+});
+
+test('server state mode=yolo 后权限请求必须自动批准', async () => {
+  const client = makeClient();
+  const app = renderInk(React.createElement(App, { client, sessionId: 'sess_test' }));
+  await settle();
+
+  client._emit('event', { type: 'state', patch: { mode: { current: 'yolo' } } });
+  await settle();
+  client._emit('server-request', permissionRequest(502, 'Bash'));
+  await settle();
+
+  expect(client.responded).toEqual([{ id: 502, result: { decision: 'allow' } }]);
+  expect(app.stdout.frames.at(-1)).not.toContain('权限请求');
   app.unmount();
 });
 

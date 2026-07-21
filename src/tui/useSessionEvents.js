@@ -33,19 +33,41 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
   const [messages, setMessages] = useState(initialMessages);
   const [status, setStatus] = useState('idle');
   const [model, setModel] = useState('GLM-5.2');
-  const [mode, setMode] = useState('build');
+  const [mode, setModeState] = useState('build');
   const [turnNumber, setTurnNumber] = useState(0);
   const [usage, setUsage] = useState(null);
   const [permissionQueue, setPermissionQueue] = useState([]);
   const [questionQueue, setQuestionQueue] = useState([]);
-  const [autoModeEnabled, setAutoModeEnabled] = useState(false);
-  const [yoloModeEnabled, setYoloModeEnabled] = useState(false);
+  const [autoModeEnabled, setAutoModeEnabledState] = useState(false);
+  const [yoloModeEnabled, setYoloModeEnabledState] = useState(false);
   const [turnStartTime, setTurnStartTime] = useState(0);
   const [responseLength, setResponseLength] = useState(0);
+  const modeRef = useRef(mode);
+  const autoModeEnabledRef = useRef(autoModeEnabled);
+  const yoloModeEnabledRef = useRef(yoloModeEnabled);
   const respondedRpcIdsRef = useRef(new Set());
   // broker 重播每次换新 rpcId（zcode.cjs: server-${nextId++} 指数退避），
   // 回答任一 id 都解析整个逻辑请求。按内容追踪最新 id，回答发给存活 id。
   const latestRequestIdsRef = useRef(new Map()); // contentKey → 最新 rpcId
+
+  const setMode = useCallback((nextMode) => {
+    modeRef.current = nextMode;
+    setModeState(nextMode);
+  }, []);
+
+  const setAutoModeEnabled = useCallback((value) => {
+    const next = typeof value === 'function' ? value(autoModeEnabledRef.current) : value;
+    autoModeEnabledRef.current = next;
+    setAutoModeEnabledState(next);
+    return next;
+  }, []);
+
+  const setYoloModeEnabled = useCallback((value) => {
+    const next = typeof value === 'function' ? value(yoloModeEnabledRef.current) : value;
+    yoloModeEnabledRef.current = next;
+    setYoloModeEnabledState(next);
+    return next;
+  }, []);
 
   useEffect(() => {
     const onEvent = (raw) => {
@@ -137,7 +159,8 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
         };
 
         // yolo mode：全部自动批准（不调 LLM，最快）
-        if (yoloModeEnabled) {
+        if (yoloModeEnabledRef.current || modeRef.current === 'yolo') {
+          respondedRpcIdsRef.current.add(msg.id);
           client.respondToServer(msg.id, { decision: 'allow' });
           setMessages(prev => [...prev, {
             role: 'tool',
@@ -150,11 +173,12 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
           }]);
         }
         // auto mode：先调 LLM 分类器判断，allow 则自动回复，block 则进人工队列
-        else if (autoModeEnabled) {
+        else if (autoModeEnabledRef.current || modeRef.current === 'auto') {
           classifyPermission(permItem.toolName, permItem.input, permItem.riskLevel)
             .then(result => {
               if (!result.shouldBlock) {
                 // 自动允许
+                respondedRpcIdsRef.current.add(msg.id);
                 client.respondToServer(msg.id, { decision: 'allow' });
                 setMessages(prev => [...prev, {
                   role: 'tool',
