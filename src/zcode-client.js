@@ -1,9 +1,24 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
+import { homedir } from 'node:os';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 const DEFAULT_CMD = 'node';
-const DEFAULT_ARGS = ['/opt/ZCode/resources/glm/zcode.cjs', 'app-server'];
+
+/** 查找引擎路径：env > ~/.local/share/zcode > /opt/ZCode */
+function findEnginePath() {
+  if (process.env.ZCODE_ENGINE_PATH && existsSync(process.env.ZCODE_ENGINE_PATH)) {
+    return process.env.ZCODE_ENGINE_PATH;
+  }
+  const localPath = join(homedir(), '.local', 'share', 'zcode', 'zcode.cjs');
+  if (existsSync(localPath)) return localPath;
+  const optPath = '/opt/ZCode/resources/glm/zcode.cjs';
+  return optPath;
+}
+
+const DEFAULT_ARGS = [findEnginePath(), 'app-server'];
 
 /**
  * 把原始 server 消息解析为高层事件对象。

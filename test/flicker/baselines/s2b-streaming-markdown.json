@@ -1,8 +1,8 @@
 {
   "frameCount": 5,
   "fps": 25,
-  "bytesTotal": 1158,
+  "bytesTotal": 689,
   "fullClearCount": 0,
-  "eraseLinesTotal": 41,
-  "layoutShifts": 0
+  "eraseLinesTotal": 0,
+  "layoutShifts": 1
 }

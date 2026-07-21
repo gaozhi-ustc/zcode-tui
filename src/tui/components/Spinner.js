@@ -14,7 +14,9 @@ const SPINNER_FRAMES = [...SPINNER_CHARS, ...[...SPINNER_CHARS].reverse().slice(
 const TICK_MS = 100;
 const FRAME_DIVISOR = 120; // frame = floor(time / 120)
 
-// 30 秒后才显示耗时和 token（SHOW_TOKENS_AFTER_MS）
+// 耗时 2 秒后即显示（秒级精度）：长时间等待时让用户明确感知系统在工作；
+// token 计数仍 30 秒后显示（早期 token 估算噪声大）
+const SHOW_TIMER_AFTER_MS = 2000;
 const SHOW_TOKENS_AFTER_MS = 30000;
 
 // stalled：30 秒无新 token 才判定（agent 思考 3-10 秒是正常的，不应误报）
@@ -149,7 +151,8 @@ export const Spinner = memo(function Spinner({
   const verbColor = stalledIntensity > 0.7 ? 'red' : undefined;
 
   // === 渐进式显示门控 ===
-  const showTimerTokens = elapsed >= SHOW_TOKENS_AFTER_MS;
+  const showTimer = elapsed >= SHOW_TIMER_AFTER_MS;
+  const showTokens = elapsed >= SHOW_TOKENS_AFTER_MS;
   const timerText = formatDuration(elapsed);
   const tokenText = `${formatTokens(displayTokens)} tokens`;
 
@@ -162,11 +165,11 @@ export const Spinner = memo(function Spinner({
     stalledIntensity > 0.7
       ? React.createElement(Text, { color: 'red' }, message)
       : React.createElement(Text, { dimColor: !currentToolName, bold: !!currentToolName }, message),
-    // 耗时 + token（30 秒后显示，括号包裹，dimColor 分隔符）
-    showTimerTokens && React.createElement(
+    // 耗时（2 秒后显示，秒级）+ token（30 秒后追加，括号包裹，dimColor 分隔符）
+    showTimer && React.createElement(
       Text,
       { dimColor: true },
-      ` (${timerText} · ${tokenText})`
+      ` (${timerText}${showTokens ? ` · ${tokenText}` : ''})`
     ),
     // stalled 标识
     isStalled && stalledIntensity > 0.5 && React.createElement(

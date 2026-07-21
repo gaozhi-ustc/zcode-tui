@@ -1,5 +1,26 @@
-import { test, expect } from 'vitest';
+import React from 'react';
+import { test, expect, vi, afterEach } from 'vitest';
 import { formatDuration, formatTokens } from '../../src/tui/components/Spinner.js';
+import { renderInk } from '../flicker/helpers/test-stdout.js';
+import { Spinner } from '../../src/tui/components/Spinner.js';
+
+afterEach(() => { vi.useRealTimers(); });
+
+test('等待时耗时 2 秒后即显示（秒级），token 30 秒后显示', async () => {
+  vi.useFakeTimers();
+  const app = renderInk(React.createElement(Spinner, {
+    active: true, startTime: Date.now(), responseLength: 0, hasActiveTools: false,
+  }));
+  await vi.advanceTimersByTimeAsync(3000);
+  let out = app.frames.join('');
+  expect(out).toMatch(/\([1-9]\d*s\)/);      // (3s) 已显示，秒级精度
+  expect(out).not.toContain('tokens');      // token 仍未显示
+  await vi.advanceTimersByTimeAsync(28000); // → 31s
+  out = app.frames.join('');
+  expect(out).toContain('31s');
+  expect(out).toContain('tokens');          // 30s 后 token 显示
+  app.unmount();
+});
 
 // === formatDuration（对齐 Claude Code）===
 
