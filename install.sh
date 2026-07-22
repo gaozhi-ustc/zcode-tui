@@ -42,6 +42,8 @@ fi
 
 # 4. wrapper
 info "安装wrapper..."; mkdir -p "$(dirname "$WRAPPER")"; cp "$TUI_DIR/src/zcode-wrapper.sh" "$WRAPPER"; chmod +x "$WRAPPER"
+# 把安装时的实际 clone 位置写入 wrapper 作为默认（仍可用 ZCODE_TUI_DIR 覆盖）
+sed -i "s|^ZCODE_TUI_DIR=\"\\\${ZCODE_TUI_DIR:-}\"|ZCODE_TUI_DIR=\"\\\${ZCODE_TUI_DIR:-$TUI_DIR}\"|" "$WRAPPER"
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"; export PATH="$HOME/.local/bin:$PATH";; esac
 ok "zcode命令就绪"
 

@@ -12,6 +12,8 @@ if [ -z "$ZCODE_TUI_DIR" ] || [ ! -d "$ZCODE_TUI_DIR/src" ]; then
     ZCODE_TUI_DIR="/opt/zcode-tui"
   elif [ -d "$HOME/zcode-tui/src" ]; then
     ZCODE_TUI_DIR="$HOME/zcode-tui"
+  elif [ -d "$HOME/ZCodeProject/zcode-tui/src" ]; then
+    ZCODE_TUI_DIR="$HOME/ZCodeProject/zcode-tui"
   else
     echo "错误：找不到 zcode-tui 目录。设置 ZCODE_TUI_DIR 环境变量。" >&2
     exit 1
