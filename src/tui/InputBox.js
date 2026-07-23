@@ -57,7 +57,7 @@ export function InputBox({ onSubmit }) {
   const draftRef = useRef(''); // 浏览历史前的草稿
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionIdx, setSuggestionIdx] = useState(0);
-  const { stdout } = useStdout();
+  const { stdout, write: writeStdout } = useStdout();
 
   const currentText = lines[curLine] || '';
   const multiline = lines.length > 1;
@@ -76,6 +76,13 @@ export function InputBox({ onSubmit }) {
   }, [lines, curLine]);
 
   useInput((input, key) => {
+    // Ctrl+L：完整重绘（修复增量渲染发散导致的残影/覆盖）
+    // 注意放在 InputBox 而非 App 全局 useInput：实测 App 顶层 useInput
+    // 在当前组件结构下收不到按键（原因待查），InputBox 稳定接收
+    if (key.ctrl && input === 'l') {
+      writeStdout('');
+      return;
+    }
     // Tab 接受补全建议
     if (key.tab && suggestions.length > 0) {
       const sugg = suggestions[suggestionIdx];

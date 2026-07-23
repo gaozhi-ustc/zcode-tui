@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { StatusBar } from './StatusBar.js';
 import { MessageList } from './MessageList.js';
@@ -51,6 +51,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
       else firstCtrlCRef.current = now;
       return;
     }
+    // Ctrl+L 处理器位于 InputBox（App 顶层 useInput 实测收不到按键）
     // Ctrl+O：切换 reasoning 展开
     if (input === '\x0f') {
       toggleReasoning();
@@ -104,6 +105,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
       '',
       '**快捷键:**',
       '  `Ctrl+C`         中断当前任务 / 双击退出',
+      '  `Ctrl+L`         重绘屏幕（修复显示残影）',
       '  `PageUp/Down`    翻看历史消息',
       '  `Shift+Enter`    多行输入换行',
       '  `↑/↓`            输入历史导航',
@@ -281,8 +283,17 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
 
   // 根高度锁定视口行数：保证渲染输出永不超视口，从源头杜绝
   // ink 溢出帧的整屏全清回退（tmux 下击键闪烁的根因，见 S8c）
-  const { stdout } = useStdout();
+  const { stdout, write: writeStdout } = useStdout();
   const termRows = stdout?.rows || 24;
+
+  // turn 结束时自动完整重绘：ink 增量渲染在长时间流式后可能出现
+  // 快照/终端发散（现场：表格底边框被后续文字覆盖且冻结），
+  // writeToStdout 走 log.clear + restoreLastOutput，自愈发散
+  const prevRunningRef = useRef(false);
+  useEffect(() => {
+    if (prevRunningRef.current && !isRunning) writeStdout('');
+    prevRunningRef.current = isRunning;
+  }, [isRunning, writeStdout]);
 
   return React.createElement(Box, { flexDirection: 'column', height: termRows, overflow: 'hidden' },
     React.createElement(StatusBar, { model, mode: yoloModeEnabled ? '🔥 yolo' : autoModeEnabled ? '🤖 auto' : mode, sessionId, status, turnNumber, usage }),
