@@ -343,6 +343,6 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
               : '[y] 允许  [a] 本工具总允许  [n] 拒绝')
           : isRunning
             ? '[Esc/Ctrl+C] 中断  [Ctrl+O] 思考过程  [/quit] quit'
-            : '[Ctrl+C×2] quit  [/quit] quit  [/clear] 清屏  [/help] 帮助')
+            : `[${yoloModeEnabled ? '🔥 yolo' : autoModeEnabled ? '🤖 auto' : '🔐 build'}]  Ctrl+C×2 quit  /mode 切换  /help 帮助`)
   );
 }
