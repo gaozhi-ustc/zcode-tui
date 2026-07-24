@@ -1,5 +1,6 @@
 import React, { useState, useEffect, memo } from 'react';
 import { Box, Text } from 'ink';
+import { sanitizeText } from '../sanitize.js';
 
 // 工具调用的闪烁加载指示器（对齐 Claude Code ToolUseLoader + useBlink）。
 // 工具行用 ●（BLACK_CIRCLE）亮/灭交替，与底部 Spinner 的旋转字符系列是
@@ -75,6 +76,7 @@ function summarizeResult(result, isError) {
   else if (Array.isArray(result)) text = result.map(r => typeof r === 'string' ? r : r?.text || JSON.stringify(r)).join('\n');
   else if (result && typeof result === 'object') text = result.content || result.text || result.output || JSON.stringify(result);
   else text = String(result || '');
+  text = sanitizeText(text); // 净化捕获输出中的 \r/ANSI（远程 pty 会话残留）
   // 折叠：超过 3 行只显示前 3 行 + 提示
   const lines = text.split('\n');
   if (lines.length > 3) {

@@ -5,6 +5,7 @@ import { ensureCliConfig } from './setup-cli-config.js';
 import { ZCodeClient } from './zcode-client.js';
 import { App } from './tui/App.js';
 import { buildRuntimeModel } from './build-runtime-model.js';
+import { sanitizeText } from './tui/sanitize.js';
 
 /**
  * 把 app-server session/read 返回的历史消息转成 App 可渲染的格式。
@@ -21,13 +22,13 @@ function convertHistoryMessages(rawMessages) {
     const toolParts = parts.filter(p => p.type === 'tool');
 
     if (isUser && textParts.length > 0) {
-      result.push({ role: 'user', text: textParts.map(p => p.text).join('\n') });
+      result.push({ role: 'user', text: sanitizeText(textParts.map(p => p.text).join('\n')) });
     } else if (!isUser) {
       // assistant 文本
       if (textParts.length > 0) {
         result.push({
           role: 'assistant',
-          text: textParts.map(p => p.text).join('\n'),
+          text: sanitizeText(textParts.map(p => p.text).join('\n')),
           streaming: false,
         });
       }

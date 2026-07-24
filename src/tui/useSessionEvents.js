@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { parseEvent } from '../zcode-client.js';
 import { classifyPermission } from './auto-mode.js';
+import { sanitizeText } from './sanitize.js';
 
 /** Normalize raw event into parsed event object. */
 function normalizeEvent(raw) {
@@ -102,7 +103,7 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
           const idx = prev.findIndex(m => m.mid === evt.assistantMessageId);
           if (idx !== -1) {
             const updated = [...prev];
-            updated[idx] = { ...updated[idx], reasoning: (updated[idx].reasoning || '') + evt.text };
+            updated[idx] = { ...updated[idx], reasoning: (updated[idx].reasoning || '') + sanitizeText(evt.text) };
             return updated;
           }
           return prev;
@@ -320,22 +321,23 @@ export function useSessionEvents(client, sessionId, initialMessages = []) {
 
 function mergeTextDelta(prev, evt) {
   const mid = evt.assistantMessageId;
+  const delta = sanitizeText(evt.text); // 净化 \r/ANSI（远程 pty 捕获内容）
   if (mid != null) {
     const idx = prev.findIndex(m => m.mid === mid);
     if (idx !== -1) {
       const updated = [...prev];
-      updated[idx] = { ...updated[idx], text: (updated[idx].text || '') + evt.text };
+      updated[idx] = { ...updated[idx], text: (updated[idx].text || '') + delta };
       return updated;
     }
   } else if (prev.length > 0) {
     const last = prev[prev.length - 1];
     if (last.role === 'assistant' && last.streaming) {
       const updated = [...prev];
-      updated[prev.length - 1] = { ...last, text: (last.text || '') + evt.text };
+      updated[prev.length - 1] = { ...last, text: (last.text || '') + delta };
       return updated;
     }
   }
-  return [...prev, { role: 'assistant', text: evt.text, mid, streaming: true }];
+  return [...prev, { role: 'assistant', text: delta, mid, streaming: true }];
 }
 
 function mergeToolCall(prev, evt) {
