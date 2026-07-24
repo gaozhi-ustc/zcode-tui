@@ -33,6 +33,8 @@ test('S4: resize 风暴 —— 缩宽全清 ≤2，同尺寸 resize 入基线', 
     initialMessages: [{ role: 'user', text: 'resize基准消息' }],
   }), { columns: 100, rows: 30 });
   await flushFrames(50);
+  // Static 架构：历史消息挂载时打印一次进入 scrollback，resize 不重印（ink 不重排 Static）
+  expect(app.stdout.frames.join('')).toContain('resize基准消息');
   app.stdout.frames.length = 0;
 
   app.stdout.resize(80, 30);   // 缩 → 预期 1 次全清
@@ -44,7 +46,7 @@ test('S4: resize 风暴 —— 缩宽全清 ≤2，同尺寸 resize 入基线', 
 
   const m = measureFrames(app.stdout.frames);
   expect(m.fullClearCount).toBeLessThanOrEqual(budgets.current.resizeMaxFullClears);
-  expect(app.frames.join('')).toContain('resize基准消息');
+  expect(app.frames.join('')).toContain('ZCode'); // 动态区（状态栏）正常重绘
 
   app.stdout.frames.length = 0;
   app.stdout.resize(60, 30);   // 同尺寸 → 记录帧数（理想为 0）

@@ -1,7 +1,6 @@
 import React, { memo } from 'react';
 import { Text, Box, useInput, useStdout } from 'ink';
-import { Markdown, StreamingMarkdown } from './markdown/Markdown.js';
-import { ToolUse } from './components/ToolUse.js';
+import { MessageItem } from './MessageItem.js';
 import { stringWidth } from './markdown/string-width.js';
 
 // 每次翻页的行数
@@ -55,7 +54,18 @@ function estimateMessageLines(m, columns) {
   return n;
 }
 
-export const MessageList = memo(function MessageList({ messages, scrollOffset = 0, setScrollOffset, inputDisabled = false }) {
+/** 消息的稳定 key：mid/toolCallId 优先，否则用其在完整列表中的位置。 */
+export function messageKey(m, globalIdx) {
+  if (m.mid != null) return `mid-${m.mid}`;
+  if (m.toolCallId != null) return `tc-${m.toolCallId}`;
+  return `${m.role}-${globalIdx}`;
+}
+
+/**
+ * 动态消息列表：渲染传入的消息（当前为「在飞后缀」），
+ * 按渲染行数预算从尾部裁剪，PageUp/PageDown 翻页。
+ */
+export const MessageList = memo(function MessageList({ messages, scrollOffset = 0, setScrollOffset, inputDisabled = false, indexBase = 0 }) {
   const { stdout } = useStdout();
   const termHeight = stdout?.rows || 24;
   // 输入框 + 状态栏 + 提示行占用约 4 行，消息区可用高度
@@ -80,7 +90,7 @@ export const MessageList = memo(function MessageList({ messages, scrollOffset = 
   const windowed = all.slice(startIdx, endIdx > 0 ? endIdx : total);
 
   // 再按渲染行数预算从尾部裁剪：保证消息区渲染高度 ≤ 视口，
-  // 配合 App 根高度锁定，杜绝 ink 溢出帧全清（tmux 闪烁根因）。
+  // 配合动态区高度锁定，杜绝 ink 溢出帧全清（tmux 闪烁根因）。
   // 注意：ink 的 overflow 裁剪只切底部，故超出预算的单条消息必须
   // 截断文本保留尾部，不能依赖 flex-end 铺底。
   const termWidth = stdout?.columns || 80;
@@ -101,56 +111,14 @@ export const MessageList = memo(function MessageList({ messages, scrollOffset = 
 
   const items = visible.map((m, i) => {
     const realIdx = cutStartIdx + i;
-    if (m.role === 'user') {
-      return React.createElement(Text, { key: realIdx, color: 'green' }, `user: ${m.text}`);
-    }
-    if (m.role === 'tool') {
-      return React.createElement(ToolUse, {
-        key: realIdx,
-        toolName: m.toolName || m.name || 'unknown',
-        toolInput: m.toolInput,
-        result: m.result,
-        error: m.error,
-        streaming: m.streaming,
-        elapsedMs: m.elapsedMs,
-        stdoutTail: m.stdoutTail,
-        stderrTail: m.stderrTail,
-        outputBytes: m.outputBytes,
-      });
-    }
-    if (m.role === 'error') {
-      return React.createElement(Text, { key: realIdx, color: 'red' }, `error: ${m.text}`);
-    }
-    // assistant 消息：streaming 用 StreamingMarkdown，完成用 Markdown
-    const indicator = m.streaming ? '▌' : '●';
-    const content = m.streaming
-      ? React.createElement(StreamingMarkdown, null, m.text || '')
-      : React.createElement(Markdown, null, m.text || '');
-    const reasoningBlock = m.reasoning ? (
-      m.reasoningExpanded
-        ? React.createElement(Box, { flexDirection: 'column', marginBottom: 0 },
-            React.createElement(Text, { dimColor: true, italic: true }, '∴ Thinking (Ctrl+O 折叠)'),
-            React.createElement(Box, { paddingLeft: 2 },
-              React.createElement(Markdown, null, m.reasoning)
-            )
-          )
-        : React.createElement(Text, { dimColor: true, italic: true },
-            `∴ Thinking (${m.reasoning.length} 字符, Ctrl+O 展开)`)
-    ) : null;
-    return React.createElement(
-      Box,
-      { key: realIdx, flexDirection: 'row' },
-      React.createElement(Text, { color: m.streaming ? 'yellow' : 'cyan' }, indicator + ' '),
-      React.createElement(Box, { flexDirection: 'column' },
-        reasoningBlock,
-        content
-      )
-    );
+    return React.createElement(MessageItem, { key: messageKey(m, indexBase + realIdx), message: m });
   });
 
   return React.createElement(Box, { flexDirection: 'column' },
     scrollOffset > 0 && React.createElement(Text, { dimColor: true },
-      `↑ 向上翻看历史 (第 ${cutStartIdx + 1}-${Math.min(endIdx, total)}/${total} 条)  PageDown 向下`),
+      `↑ 向上翻看历史 (第 ${startIdx + 1}-${Math.min(endIdx, total)}/${total} 条)  PageDown 向下`),
     ...items
   );
 });
+
+export default MessageList;

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Box, Text, useApp, useInput, useStdout } from 'ink';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { Box, Text, Static, useApp, useInput, useStdout } from 'ink';
 import { StatusBar } from './StatusBar.js';
-import { MessageList } from './MessageList.js';
+import { MessageList, messageKey } from './MessageList.js';
+import { MessageItem } from './MessageItem.js';
 import { InputBox } from './InputBox.js';
 import { ToolUse } from './components/ToolUse.js';
 import { PermissionDialog } from './components/PermissionDialog.js';
@@ -12,6 +13,12 @@ import { Spinner } from './components/Spinner.js';
 import { useSessionEvents, buildRuleContent } from './useSessionEvents.js';
 
 const DOUBLE_PRESS_TIMEOUT_MS = 800;
+
+// memo 包裹的 Static：items/renderItem 引用稳定时跳过重渲染，
+// 避免 ink Static 每次重渲染都触发 isStaticDirty 直渲（绕过 throttle）
+const StaticHistory = memo(function StaticHistory({ items, renderItem }) {
+  return React.createElement(Static, { items }, renderItem);
+});
 
 export function App({ client, sessionId, initialMessages = [], runtimeModel = null }) {
   const {
@@ -26,6 +33,8 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   } = useSessionEvents(client, sessionId, initialMessages);
 
   const [scrollOffset, setScrollOffset] = useState(0);
+  // /clear 时 +1：重挂载 Static 清空屏幕上的历史区（scrollback 中仍保留）
+  const [clearEpoch, setClearEpoch] = useState(0);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
   const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
@@ -213,6 +222,8 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           break;
         case 'clear':
           clearMessages();
+          setClearEpoch(e => e + 1); // 重挂载 Static（屏幕上的历史区随之清空）
+          writeStdout('\x1b[2J\x1b[3J\x1b[H'); // 全清终端（scrollback 不受影响）
           break;
         case 'help':
         case '?':
@@ -295,10 +306,37 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
     prevRunningRef.current = isRunning;
   }, [isRunning, writeStdout]);
 
-  return React.createElement(Box, { flexDirection: 'column', height: termRows, overflow: 'hidden' },
+  // 已完成消息前缀（进入 <Static>，打印一次后滚进终端 scrollback，永不重绘）；
+  // 在飞后缀（streaming 文本/工具）留在动态区。前缀必须连续，
+  // 防止后发先至的完成消息插入 Static 中间位置（Static 按索引追踪）。
+  // ink 的 Static 每次重渲染都会让 static 节点 commitUpdate → isStaticDirty →
+  // reconciler 走 onImmediateRender 直渲（绕过 throttle，每 delta 一帧）。
+  // 对策：items 引用在内容不变时保持稳定（逐项引用比较），配合外层 memo 组件
+  // 让 Static 在流式期间完全不重渲染。
+  const finalizedCacheRef = useRef([]);
+  const [finalizedMessages, inFlightMessages] = React.useMemo(() => {
+    let splitIdx = 0;
+    while (splitIdx < messages.length && !messages[splitIdx].streaming) splitIdx++;
+    const prev = finalizedCacheRef.current;
+    let finalized = prev;
+    if (prev.length !== splitIdx || !prev.every((m, i) => m === messages[i])) {
+      finalized = messages.slice(0, splitIdx);
+      finalizedCacheRef.current = finalized;
+    }
+    return [finalized, messages.slice(splitIdx)];
+  }, [messages]);
+
+  // Static 的 render prop 必须稳定（useCallback 空依赖），配合 StaticHistory 的
+  // memo：流式期间 props 不变 → Static 不重渲染 → 不触发 isStaticDirty 直渲
+  const renderStaticItem = useCallback((m, i) =>
+    React.createElement(MessageItem, { key: messageKey(m, i), message: m }), []);
+
+  return React.createElement(Box, { flexDirection: 'column' },
+    React.createElement(StaticHistory, { key: clearEpoch, items: finalizedMessages, renderItem: renderStaticItem }),
+    React.createElement(Box, { flexDirection: 'column', height: termRows, overflow: 'hidden' },
     React.createElement(StatusBar, { model, mode: yoloModeEnabled ? '🔥 yolo' : autoModeEnabled ? '🤖 auto' : mode, sessionId, status, turnNumber, usage }),
     React.createElement(Box, { flexGrow: 1, flexDirection: 'column', overflow: 'hidden' },
-      React.createElement(MessageList, { messages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen }),
+      React.createElement(MessageList, { messages: inFlightMessages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen, indexBase: finalizedMessages.length }),
     ),
     React.createElement(Spinner, {
       active: isRunning && !dialogActive && !modelPickerOpen,
@@ -355,5 +393,6 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           : isRunning
             ? '[Esc/Ctrl+C] 中断  [Ctrl+O] 思考过程  [/quit] quit'
             : `[${yoloModeEnabled ? '🔥 yolo' : autoModeEnabled ? '🤖 auto' : '🔐 build'}]  Ctrl+C×2 quit  /mode 切换  /help 帮助`)
+    )
   );
 }

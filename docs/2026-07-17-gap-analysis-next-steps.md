@@ -26,9 +26,10 @@ zcode-tui 用 stock ink，任何 setState = 整屏擦除重写。实测：spinne
 1. **开启 ink `incrementalRendering`（一天级 spike）**：ink 7 原生选项，行级 diff 替代整屏擦除。
    用 S1/S2/S4 基线对比开启前后的 eraseLinesTotal（预期 154 → 个位数）。风险：需验证与
    wrap-ansi、`<Ansi>` 的兼容性——测试网正好兜住。
-2. **引入 `<Static>` 渲染已完成消息**：历史移出动态区后，spinner tick / 流式 delta 不再
-   重排重发历史（Claude Code 靠 patch-diff 达到同等效果，我们用 stock ink 的 Static 即可）。
-   对应守护：S1 的 stableLineViolations + eraseLinesTotal 基线。
+2. **引入 `<Static>` 渲染已完成消息** —— ✅ 已完成（2026-07-24）：finalized 前缀进
+   `<Static>` 打印一次后滚进终端 scrollback（tmux 可上翻查阅，实测 60/60 行完整），
+   动态区只留在飞内容。关键坑：ink 的 Static 每次重渲染会触发 isStaticDirty 直渲
+   （绕过 throttle），需 memo 包裹 + items/render prop 引用稳定。
 3. **动画时钟收口**：Spinner/ToolUse blink 各自 setInterval → 单一共享 ClockContext
    （对齐 Claude Code），时钟组件下沉为叶子节点，父树不参与 tick 重渲染。
    对应靶点：S1-target（5.2fps → ≤2fps，test.fails 等待翻转）。

@@ -31,7 +31,8 @@ test('Ctrl+L 触发完整重绘（擦除 + 全量重写，无全清）', async (
   const m = measureFrames(app.stdout.frames);
   expect(m.eraseLinesTotal).toBeGreaterThan(0); // 有整区擦除
   expect(m.fullClearCount).toBe(0);             // 但不走 ESC[2J 全清
-  expect(app.stdout.frames.join('')).toContain('重绘标记REDRAW'); // 内容完整重写
+  // 重绘重写动态区（状态栏）；Static 历史区按设计不重复打印
+  expect(app.stdout.frames.join('')).toContain('ZCode');
   app.unmount();
 });
 
@@ -52,9 +53,10 @@ test('turn 结束自动完整重绘（自愈发散）', async () => {
   await makeScript(client).turnComplete(1).run();
   await flushFrames(300);
 
-  // turn 结束后的自动重绘：应出现 擦除+全量重写
+  // turn 结束后的自动重绘：应出现 擦除+全量重写（动态区）
   const m = measureFrames(app.stdout.frames);
   expect(m.eraseLinesTotal).toBeGreaterThan(0);
-  expect(app.stdout.frames.join('')).toContain('自愈标记HEAL');
+  // 流式文本在完成后已打印进 Static
+  expect(app.stdout.frames.join('')).toContain('工作中');
   app.unmount();
 });
