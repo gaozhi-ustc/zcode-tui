@@ -29,15 +29,28 @@ info "安装 zcode-tui..."
 if [ -d "$TUI_DIR/.git" ]; then cd "$TUI_DIR" && git pull --ff-only; else git clone https://github.com/gaozhi-ustc/zcode-tui.git "$TUI_DIR"; fi
 cd "$TUI_DIR" && npm install --silent; ok "代码 → $TUI_DIR"
 
-# 3. 引擎
+# 3. 引擎（自动从 GitHub Release 下载，无需从本机拷贝）
 info "检查引擎..."
 ENG=""
-[ -f "/opt/ZCode/resources/glm/zcode.cjs" ] && { ok "GUI引擎"; ENG="/opt/ZCode/resources/glm/zcode.cjs"; } || true
-[ -z "$ENG" ] && [ -f "$ENGINE_PATH" ] && { ok "已有引擎"; ENG="$ENGINE_PATH"; } || true
+[ -f "/opt/ZCode/resources/glm/zcode.cjs" ] && { ok "GUI引擎: /opt/ZCode/..."; ENG="/opt/ZCode/resources/glm/zcode.cjs"; } || true
+[ -z "$ENG" ] && [ -f "$ENGINE_PATH" ] && { ok "已有引擎: $ENGINE_PATH"; ENG="$ENGINE_PATH"; } || true
 if [ -z "$ENG" ]; then
-  warn "未检测到引擎(zcode.cjs,~9MB)。从已装GUI的机器: scp /opt/ZCode/resources/glm/zcode.cjs 目标:$ENGINE_PATH"
-  read -p "  引擎路径或URL(留空跳过): " UE
-  if [ -n "$UE" ]; then mkdir -p "$ENGINE_DIR"; [[ "$UE" == http* ]] && curl -fsSL "$UE" -o "$ENGINE_PATH" || [ -f "$UE" ] && cp "$UE" "$ENGINE_PATH"; [ -f "$ENGINE_PATH" ] && ENG="$ENGINE_PATH" && ok "引擎已装" || warn "引擎未装"; fi
+  info "从 GitHub Release 自动下载引擎 (zcode.cjs, ~9MB)..."
+  mkdir -p "$ENGINE_DIR"
+  ENGINE_URL="https://github.com/gaozhi-ustc/zcode-tui/releases/download/v0.1.0/zcode.cjs"
+  if curl -fsSL "$ENGINE_URL" -o "$ENGINE_PATH" && [ -f "$ENGINE_PATH" ] && [ -s "$ENGINE_PATH" ]; then
+    ok "引擎已下载到 $ENGINE_PATH"
+    ENG="$ENGINE_PATH"
+  else
+    rm -f "$ENGINE_PATH"
+    warn "自动下载失败。手动方式："
+    warn "  scp /opt/ZCode/resources/glm/zcode.cjs 目标:$ENGINE_PATH"
+    read -p "  或输入引擎文件路径/URL(留空跳过): " UE
+    if [ -n "$UE" ]; then
+      [[ "$UE" == http* ]] && curl -fsSL "$UE" -o "$ENGINE_PATH" || [ -f "$UE" ] && cp "$UE" "$ENGINE_PATH"
+      [ -f "$ENGINE_PATH" ] && [ -s "$ENGINE_PATH" ] && ENG="$ENGINE_PATH" && ok "引擎已装" || warn "引擎未装"
+    fi
+  fi
 fi
 
 # 4. wrapper
