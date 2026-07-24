@@ -333,7 +333,10 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
 
   return React.createElement(Box, { flexDirection: 'column' },
     React.createElement(StaticHistory, { key: clearEpoch, items: finalizedMessages, renderItem: renderStaticItem }),
-    React.createElement(Box, { flexDirection: 'column', height: termRows, overflow: 'hidden' },
+    // maxHeight 而非固定 height：空闲时动态区收缩到内容高度，
+    // 让 Static 里的最新消息留在视口内（固定 height 会用空白填满视口，
+    // 把刚完成的答案挤出屏幕——现场“一闪而过”）；超高时仍 capped 防溢出
+    React.createElement(Box, { flexDirection: 'column', maxHeight: termRows, overflow: 'hidden' },
     React.createElement(StatusBar, { model, mode: yoloModeEnabled ? '🔥 yolo' : autoModeEnabled ? '🤖 auto' : mode, sessionId, status, turnNumber, usage }),
     React.createElement(Box, { flexGrow: 1, flexDirection: 'column', overflow: 'hidden' },
       React.createElement(MessageList, { messages: inFlightMessages, scrollOffset, setScrollOffset, inputDisabled: dialogActive || modelPickerOpen, indexBase: finalizedMessages.length }),

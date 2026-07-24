@@ -1,9 +1,9 @@
 {
   "frameCount": 10,
   "fps": 20,
-  "bytesTotal": 4045,
+  "bytesTotal": 1705,
   "fullClearCount": 0,
-  "eraseLinesTotal": 290,
+  "eraseLinesTotal": 30,
   "layoutShifts": 0,
   "maxDiffLines": 1
 }
