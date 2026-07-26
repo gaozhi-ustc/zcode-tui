@@ -8,7 +8,13 @@ warn()  { echo -e "${YELLOW}⚠${NC} $*"; }
 err()   { echo -e "${RED}✗${NC} $*" >&2; }
 
 TUI_DIR="${ZCODE_TUI_DIR:-$HOME/zcode-tui}"
-ENGINE_DIR="$HOME/.local/share/zcode"
+# root 安装时引擎放系统级位置（所有用户可用，对齐 zcode-client.js 的
+# findEnginePath 查找顺序）；普通用户放 ~/.local/share
+if [ "$(id -u)" -eq 0 ]; then
+  ENGINE_DIR="/opt/zcode-engine"
+else
+  ENGINE_DIR="$HOME/.local/share/zcode"
+fi
 ENGINE_PATH="$ENGINE_DIR/zcode.cjs"
 CLI_DIR="$HOME/.zcode/cli"
 CLI_CONFIG="$CLI_DIR/config.json"
@@ -33,6 +39,7 @@ cd "$TUI_DIR" && npm install --silent; ok "代码 → $TUI_DIR"
 info "检查引擎..."
 ENG=""
 [ -f "/opt/ZCode/resources/glm/zcode.cjs" ] && { ok "GUI引擎: /opt/ZCode/..."; ENG="/opt/ZCode/resources/glm/zcode.cjs"; } || true
+[ -z "$ENG" ] && [ -f "/opt/zcode-engine/zcode.cjs" ] && { ok "系统引擎: /opt/zcode-engine/..."; ENG="/opt/zcode-engine/zcode.cjs"; } || true
 [ -z "$ENG" ] && [ -f "$ENGINE_PATH" ] && { ok "已有引擎: $ENGINE_PATH"; ENG="$ENGINE_PATH"; } || true
 if [ -z "$ENG" ]; then
   info "从 GitHub Release 自动下载引擎 (zcode.cjs, ~9MB)..."
