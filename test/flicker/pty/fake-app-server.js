@@ -70,6 +70,19 @@ rl.on('line', (line) => {
       notify('model.streaming', { kind: 'text_delta', delta: '模型反馈MARKER', assistantMessageId: 'm1' });
       setTimeout(() => process.stderr.write('SCENARIO_DONE\n'), 1000);
     }, 2000);
+  } else if (msg.method === 'session/send' && scenario === 'p7-queue') {
+    // 收到 prompt：开始 3s 的 turn（模拟运行中），用于验证运行中新消息排队
+    const n = (globalThis.__turnNo = (globalThis.__turnNo || 0) + 1);
+    send({ jsonrpc: '2.0', id: msg.id, result: {} });
+    notify('turn.started', { turnNumber: n });
+    let i = 0;
+    const timer = setInterval(() => {
+      notify('model.streaming', { kind: 'text_delta', delta: `T${n}回复 `, assistantMessageId: `m${n}` });
+      if (++i >= 10) {
+        clearInterval(timer);
+        notify('turn.completed', { turnNumber: n });
+      }
+    }, 300);
   } else if (msg.id != null) {
     send({ jsonrpc: '2.0', id: msg.id, result: {} });
   }

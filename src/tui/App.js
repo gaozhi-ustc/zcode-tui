@@ -33,6 +33,8 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   } = useSessionEvents(client, sessionId, initialMessages);
 
   const [scrollOffset, setScrollOffset] = useState(0);
+  // 待执行消息队列：turn 运行中用户输入先排队，turn 结束自动依次发送
+  const [pendingQueue, setPendingQueue] = useState([]);
   // /clear 时 +1：重挂载 Static 清空屏幕上的历史区（scrollback 中仍保留）
   const [clearEpoch, setClearEpoch] = useState(0);
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -75,13 +77,26 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
 
   const handleSubmit = async (text) => {
     if (dialogActive) return;
-    addUserMessage(text);
-    setScrollOffset(0);
     if (text.startsWith('/')) {
+      // 斜杠命令始终立即执行，不进队列
+      addUserMessage(text);
+      setScrollOffset(0);
       if (text.trim() === '/quit') exit();
       else await handleSlashCommand(text);
       return;
     }
+    // turn 运行中：进入待执行队列（对齐 Claude Code），
+    // 而不是把消息发给 server 被拒 "A prompt is already running"
+    if (isRunning) {
+      setPendingQueue(q => [...q, text]);
+      return;
+    }
+    addUserMessage(text);
+    setScrollOffset(0);
+    await sendToServer(text);
+  };
+
+  const sendToServer = async (text) => {
     try {
       if (runtimeModelRef.current) {
         await client.sendMessage(sessionId, text, runtimeModelRef.current);
@@ -89,6 +104,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
       } else {
         await client.sendMessage(sessionId, text);
       }
+      return true;
     } catch (e) {
       const errMsg = e.message || JSON.stringify(e);
       if (errMsg.includes('模型') && errMsg.includes('不可用') || e.code === -32031) {
@@ -97,8 +113,27 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
       } else {
         addErrorMessage(errMsg);
       }
+      return false;
     }
   };
+
+  // turn 结束（或中断）后：自动发送队列中的下一条（每次 turn 发一条，
+  // 避免一回合塞入多个 prompt 再被 server 拒绝）
+  // awaitingTurnStart：已发出但 server 的 turn.started 还没到，期间不得再发
+  const [awaitingTurnStart, setAwaitingTurnStart] = useState(false);
+  useEffect(() => {
+    if (isRunning) {
+      if (awaitingTurnStart) setAwaitingTurnStart(false);
+      return;
+    }
+    if (dialogActive || awaitingTurnStart || pendingQueue.length === 0) return;
+    const [next, ...rest] = pendingQueue;
+    setPendingQueue(rest);
+    setAwaitingTurnStart(true);
+    addUserMessage(next);
+    setScrollOffset(0);
+    void sendToServer(next).then(ok => { if (!ok) setAwaitingTurnStart(false); });
+  }, [isRunning, dialogActive, awaitingTurnStart, pendingQueue]);
 
   // /help：显示可用命令和快捷键
   const showHelp = () => {
@@ -383,7 +418,11 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
               onDecide: handlePermissionDecide,
             })
           : React.createElement(InputBox, { onSubmit: handleSubmit }),
-    React.createElement(Text, { dimColor: true }, isRunning
+    // 排队提示：有待执行消息时优先显示，让用户知道消息已入队而非被拒
+    pendingQueue.length > 0
+      ? React.createElement(Text, { dimColor: true },
+          `⏳ 排队 ${pendingQueue.length} 条: "${pendingQueue[0].slice(0, 40)}${pendingQueue[0].length > 40 ? '…' : ''}"（turn 结束后自动发送）`)
+      : React.createElement(Text, { dimColor: true }, isRunning
       ? '[Ctrl+C] 中断当前任务'
       : questionQueue.length > 0
         ? (questionQueue.length > 1
