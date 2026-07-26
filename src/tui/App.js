@@ -286,7 +286,7 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
   };
 
   // 权限决策
-  const handlePermissionDecide = (decision) => {
+  const handlePermissionDecide = (decision, feedback) => {
     const result = decidePermission(decision);
     if (!result) return;
     try {
@@ -296,6 +296,12 @@ export function App({ client, sessionId, initialMessages = [], runtimeModel = nu
           permissionUpdates: [{ type: 'addRules', behavior: 'allow',
             rules: [{ toolName: result.toolName, ...buildRuleContent(result.input) }] }],
         });
+      } else if (decision === 'deny-feedback') {
+        // 对齐 Claude Code "No, and tell Claude what to do differently"：
+        // 拒绝 + 用户指令作为 reason，模型据此调整后续行为
+        client.respondToServer(result.rpcId, { decision: 'deny', reason: feedback });
+        addUserMessage(`⛔ 已拒绝: ${feedback}`);
+        setScrollOffset(0);
       } else {
         client.respondToServer(result.rpcId, { decision: decision === 'yes' ? 'allow' : 'deny' });
       }

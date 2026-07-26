@@ -45,6 +45,11 @@ function runScenario() {
     } });
     ask();
     globalThis.__reannounce = setInterval(ask, 1000);
+  } else if (scenario === 'p8-permission') {
+    notify('turn.started', { turnNumber: 1 });
+    send({ jsonrpc: '2.0', id: 800, method: 'interaction/requestPermission', params: {
+      toolName: 'Bash', input: { command: 'rm -rf /tmp/x' }, reason: 'Tool has side effects and requires approval', riskLevel: 'medium',
+    } });
   } else if (scenario === 'p3-resize') {
     notify('turn.started', { turnNumber: 1 });
     setTimeout(() => {
@@ -83,6 +88,10 @@ rl.on('line', (line) => {
         notify('turn.completed', { turnNumber: n });
       }
     }, 300);
+  } else if (msg.id === 800) {
+    // 权限响应：打印决策内容用于验证 deny+reason
+    process.stderr.write(`PERMISSION_RESULT ${JSON.stringify(msg.result)}\n`);
+    notify('turn.completed', { turnNumber: 1 });
   } else if (msg.id != null) {
     send({ jsonrpc: '2.0', id: msg.id, result: {} });
   }
